@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": "public",
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/daily.json",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+    }
+  ]
+}

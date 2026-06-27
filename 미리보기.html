@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>아침 시장 점검 (미리보기)</title>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --line: #21262d; --text: #e6edf3;
+    --muted: #8b949e; --up: #f85149; --down: #3fb950; --accent: #58a6ff; --warn: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    line-height: 1.55; padding: 20px; max-width: 760px; margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  .preview-tip {
+    background: rgba(88,166,255,.12); border: 1px solid var(--accent); color: var(--accent);
+    border-radius: 10px; padding: 10px 14px; font-size: 12px; margin-bottom: 16px;
+  }
+  header { margin: 8px 0 20px; }
+  h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .updated { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .ai {
+    background: linear-gradient(135deg, #161b22, #1c2333);
+    border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 18px;
+  }
+  .ai .tag { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0.5px; }
+  .ai .reading { font-size: 16px; margin: 10px 0 14px; }
+  .ai .mindset {
+    font-size: 14px; color: var(--muted); border-left: 3px solid var(--accent);
+    padding-left: 12px; font-style: italic;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card .label { font-size: 13px; color: var(--muted); }
+  .card .price { font-size: 26px; font-weight: 700; margin-top: 6px; letter-spacing: -0.5px; }
+  .card .chg { font-size: 13px; font-weight: 600; margin-top: 2px; }
+  .card .note { font-size: 11px; color: var(--muted); margin-top: 6px; min-height: 14px; }
+  .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); }
+  svg.spark { width: 100%; height: 36px; margin-top: 10px; display: block; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-top: 8px; }
+  .badge.calm { background: rgba(63,185,80,.15); color: var(--down); }
+  .badge.watch { background: rgba(210,153,34,.15); color: var(--warn); }
+  .badge.fear { background: rgba(248,81,73,.15); color: var(--up); }
+  /* VIX 색깔 눈금 막대 */
+  .gauge {
+    position: relative; height: 7px; border-radius: 4px; margin-top: 12px;
+    background: linear-gradient(90deg, #3fb950 0%, #d29922 55%, #f85149 100%);
+  }
+  .gauge-marker {
+    position: absolute; top: -3px; width: 3px; height: 13px; background: #fff;
+    border-radius: 2px; transform: translateX(-50%); box-shadow: 0 0 5px rgba(0,0,0,.7);
+  }
+  .gauge-labels {
+    display: flex; justify-content: space-between; font-size: 9px;
+    color: var(--muted); margin-top: 4px;
+  }
+  footer { color: var(--muted); font-size: 11px; text-align: center; margin: 24px 0 8px; }
+  .section-title { font-size: 15px; font-weight: 700; margin: 26px 0 12px; letter-spacing: -0.3px; }
+  .stock { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .stock-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .stock-name { font-size: 15px; font-weight: 700; }
+  .stock-code { font-size: 11px; color: var(--muted); margin-left: 6px; font-weight: 400; }
+  .stock-price { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .stock-chg { font-size: 13px; font-weight: 600; }
+  .range { position: relative; height: 6px; border-radius: 4px; margin: 12px 0 4px;
+    background: linear-gradient(90deg, #3fb950, #d29922, #f85149); }
+  .range-marker { position: absolute; top: -3px; width: 3px; height: 12px; background: #fff;
+    border-radius: 2px; transform: translateX(-50%); box-shadow: 0 0 5px rgba(0,0,0,.7); }
+  .range-labels { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }
+  .stock-note { font-size: 13px; margin: 12px 0 4px; line-height: 1.5; }
+  .tags { margin: 6px 0; }
+  .tag-chip { display: inline-block; font-size: 10px; background: rgba(88,166,255,.12);
+    color: var(--accent); padding: 2px 8px; border-radius: 999px; margin-right: 5px; }
+  .news { list-style: none; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .news li { font-size: 12px; color: var(--muted); padding: 3px 0; line-height: 1.4; }
+  .news li::before { content: "📰 "; }
+</style>
+</head>
+<body>
+  <div class="preview-tip">
+    👀 이건 <b>미리보기</b>예요. 아래 숫자는 예시(샘플)입니다.<br />
+    인터넷에 정식으로 올리면 매일 아침 7시에 진짜 숫자로 자동 갱신돼요.
+  </div>
+
+  <header>
+    <h1>☕ 아침 시장 점검</h1>
+    <div class="updated" id="updated">샘플 데이터</div>
+  </header>
+
+  <div class="ai">
+    <div class="tag">오늘의 계기판 읽기</div>
+    <div class="reading" id="aiReading">…</div>
+    <div class="mindset" id="aiMindset">…</div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <h2 class="section-title">📌 내 종목 관찰 일지</h2>
+  <div id="holdings"></div>
+
+  <footer>
+    지표는 미래를 맞히는 점쟁이가 아니라 운전 계기판입니다.<br />
+    종목 코멘트는 그날의 사실 정리일 뿐, 예측·매매 권유가 아닙니다.<br />
+    투자 판단과 책임은 본인에게 있습니다.
+  </footer>
+
+<script>
+// 미리보기용 샘플 데이터 (파일 안에 직접 넣어둠 → 더블클릭만 해도 보임)
+const d = {
+  updatedAt: "샘플 데이터 (정식 배포 후 매일 07:00 자동 갱신)",
+  rateVelocity: 0.05,
+  metrics: {
+    kosdaq: { label: "코스닥", unit: "pt", price: 851.37, changePct: -0.56,
+      history: [872.1, 868.4, 865.0, 861.2, 858.9, 860.1, 857.3, 856.2, 851.37] },
+    ust10y: { label: "미국 10년물 금리", unit: "%", price: 4.372, changePct: 0.51,
+      history: [4.28, 4.30, 4.32, 4.31, 4.34, 4.33, 4.35, 4.37, 4.372] },
+    vix: { label: "VIX(공포지수)", unit: "", price: 18.41, changePct: -2.59,
+      history: [17.2, 17.8, 19.1, 20.3, 19.5, 18.9, 18.6, 18.9, 18.41] },
+    usdkrw: { label: "원/달러 환율", unit: "원", price: 1535.0, changePct: 0.20,
+      history: [1510, 1515, 1520, 1525, 1528, 1530, 1532, 1534, 1535] }
+  },
+  ai: {
+    reading: "코스닥은 851pt로 소폭 약세지만 큰 충격은 아니야. 10년물 금리는 4.37%로 네가 경계선으로 보는 5%와는 아직 거리가 있고, 최근 상승 속도도 완만한 편이야. VIX는 18로 평온 구간이라 시장이 패닉 상태는 아니야.",
+    mindset: "계기판에 빨간불이 켜진 건 아니야. 오늘도 시장 방향을 맞히려 애쓰기보다, 네가 가진 회사가 돈을 잘 버는지에 집중해보자."
+  },
+  holdings: [
+    {
+      label: "클로봇", code: "466100", unit: "원", price: 28650, changePct: -1.21, rangePct: 58,
+      history: [31200, 30800, 30100, 29500, 29800, 29200, 28900, 29000, 28650],
+      ai: {
+        note: "클로봇은 28,650원으로 소폭 약세야. 연중 범위로 보면 중상단 정도 위치. 뉴스에는 유상증자(유증)를 앞두고 주가 변수라는 얘기가 보이는데, 이게 사실인지는 공시를 직접 확인해보는 게 좋아. 특별한 호재 뉴스는 안 보여.",
+        tags: ["유상증자", "스마트제조"]
+      },
+      news: [
+        { title: "'유증' 앞둔 클로봇, 주가 하락 '변수' : 네이버 블로그" },
+        { title: "클로봇, 에이테크경주에 스마트 제조자동화시스템 구축 - 디일렉" }
+      ]
+    },
+    {
+      label: "HLB", code: "028300", unit: "원", price: 47700, changePct: 2.36, rangePct: 41,
+      history: [44200, 45100, 44800, 45500, 46200, 46000, 46800, 47100, 47700],
+      ai: {
+        note: "HLB는 47,700원으로 강세야. 뉴스에 간암 신약 FDA 결정을 앞두고 기대감이 있다는 얘기가 보이는데, 이런 신약 이슈는 기대만으로 주가가 크게 출렁이니 '오른다'고 단정하긴 일러. 中 파트너사 제조 이슈가 변수라는 보도도 있으니, 흥분하지 말고 공식 공시 위주로 확인하자.",
+        tags: ["FDA", "간암신약", "변수"]
+      },
+      news: [
+        { title: "[바이오e종목] 간암 신약 FDA 결정 한 달 앞, HLB 강세…中 파트너사 제조 이슈는 변수 - 조선비즈" },
+        { title: "HLB, 주가 급변동에 주주 공지…\"FDA 승인 절차 정상 진행, 미확인 정보 주의\" - PRESS9" }
+      ]
+    }
+  ]
+};
+
+function fmt(n, unit) {
+  if (n == null) return "확인필요";
+  const s = n.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+  return unit === "%" ? s + "%" : unit === "원" ? s + "원" : s;
+}
+function chgClass(p) { return p > 0 ? "up" : p < 0 ? "down" : "flat"; }
+function chgText(p) {
+  if (p == null) return "";
+  const sign = p > 0 ? "▲" : p < 0 ? "▼" : "─";
+  return `${sign} ${Math.abs(p).toFixed(2)}%`;
+}
+function spark(hist, cls) {
+  if (!hist || hist.length < 2) return "";
+  const w = 200, h = 36, min = Math.min(...hist), max = Math.max(...hist);
+  const range = max - min || 1;
+  const pts = hist.map((v, i) => {
+    const x = (i / (hist.length - 1)) * w;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const color = cls === "up" ? "#f85149" : cls === "down" ? "#3fb950" : "#8b949e";
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8"
+      stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function vixBadge(v) {
+  if (v == null) return "";
+  if (v < 20) return '<span class="badge calm">😌 평온</span>';
+  if (v < 30) return '<span class="badge watch">😟 경계</span>';
+  return '<span class="badge fear">😱 시장이 겁먹음</span>';
+}
+// VIX 색깔 눈금 막대 (0~40 범위로 위치 표시)
+function vixGauge(v) {
+  if (v == null) return "";
+  const pct = Math.max(0, Math.min(100, (v / 40) * 100));
+  return `
+    <div class="gauge"><div class="gauge-marker" style="left:${pct}%"></div></div>
+    <div class="gauge-labels"><span>0 평온</span><span>20</span><span>30</span><span>40 공포</span></div>`;
+}
+// VIX 한 줄 설명
+function vixNote(v) {
+  if (v == null) return "";
+  if (v < 20) return "지금은 낮은 편 = 시장이 평온해요";
+  if (v < 30) return "약간 높은 편 = 시장이 긴장하기 시작";
+  return "높은 편 = 공포가 크다는 건 이미 많이 반영됐을 수도";
+}
+// 환율 영향 설명 (코스닥 투자자 관점)
+function fxNote(price, chgPct) {
+  if (price == null) return "";
+  let level;
+  if (price >= 1450) level = "원화가 약한(고환율) 편이에요. 외국인이 한국 주식을 팔기 쉬운 환경 → 코스닥엔 부담될 수 있어요.";
+  else if (price <= 1250) level = "원화가 강한(저환율) 편이에요. 외국인 자금이 들어오기 좋은 환경 → 코스닥엔 우호적인 편.";
+  else level = "환율은 무난한 수준이에요.";
+  const dir = chgPct > 0 ? " (오늘은 환율이 더 올라 원화 약세 ↑)" :
+              chgPct < 0 ? " (오늘은 환율이 내려 원화 강세 ↑)" : "";
+  return level + dir;
+}
+function rateNote(vel) {
+  if (vel == null) return "";
+  if (vel >= 0.2) return `최근 5일 +${vel}%p · 빠르게 오르는 중 (성장주 부담)`;
+  if (vel <= -0.2) return `최근 5일 ${vel}%p · 내려오는 중`;
+  return `최근 5일 ${vel >= 0 ? "+" : ""}${vel}%p · 완만`;
+}
+
+document.getElementById("updated").textContent = "업데이트: " + d.updatedAt;
+document.getElementById("aiReading").textContent = d.ai.reading;
+document.getElementById("aiMindset").textContent = d.ai.mindset;
+
+const order = ["kosdaq", "ust10y", "vix", "usdkrw"];
+const grid = document.getElementById("grid");
+for (const key of order) {
+  const x = d.metrics[key];
+  const cls = chgClass(x.changePct);
+  let note = "", badge = "", gauge = "";
+  if (key === "ust10y") note = rateNote(d.rateVelocity);
+  if (key === "vix") { badge = vixBadge(x.price); gauge = vixGauge(x.price); note = vixNote(x.price); }
+  if (key === "usdkrw") note = fxNote(x.price, x.changePct);
+  // VIX는 흐름 차트(최근 추이) + 눈금 막대(지금 위치)를 함께 표시
+  const visual = key === "vix" ? spark(x.history, cls) + gauge : spark(x.history, cls);
+  grid.insertAdjacentHTML("beforeend", `
+    <div class="card">
+      <div class="label">${x.label}</div>
+      <div class="price">${fmt(x.price, x.unit)}</div>
+      <div class="chg ${cls}">${chgText(x.changePct)}</div>
+      ${badge}
+      ${visual}
+      <div class="note">${note}</div>
+    </div>`);
+}
+
+// 52주 위치 한 줄 설명
+function rangeWord(p) {
+  if (p == null) return "";
+  if (p >= 80) return "연중 고점 부근 (비싼 구간)";
+  if (p >= 55) return "연중 중상단";
+  if (p >= 30) return "연중 중간쯤";
+  return "연중 저점 부근 (싼 구간)";
+}
+
+const holdingsBox = document.getElementById("holdings");
+for (const h of d.holdings) {
+  const cls = chgClass(h.changePct);
+  const rp = h.rangePct;
+  const rangeBar = rp == null ? "" : `
+    <div class="range"><div class="range-marker" style="left:${rp}%"></div></div>
+    <div class="range-labels"><span>연저점</span><span>${rangeWord(rp)}</span><span>연고점</span></div>`;
+  const tags = (h.ai?.tags || []).map((t) => `<span class="tag-chip">#${t}</span>`).join("");
+  const news = (h.news || []).slice(0, 3).map((n) => `<li>${n.title}</li>`).join("");
+  holdingsBox.insertAdjacentHTML("beforeend", `
+    <div class="stock">
+      <div class="stock-head">
+        <div><span class="stock-name">${h.label}</span><span class="stock-code">${h.code}</span></div>
+        <div style="text-align:right">
+          <div class="stock-price">${fmt(h.price, h.unit)}</div>
+          <div class="stock-chg ${cls}">${chgText(h.changePct)}</div>
+        </div>
+      </div>
+      ${spark(h.history, cls)}
+      ${rangeBar}
+      <div class="stock-note">${h.ai?.note || ""}</div>
+      <div class="tags">${tags}</div>
+      ${news ? `<ul class="news">${news}</ul>` : ""}
+    </div>`);
+}
+</script>
+</body>
+</html>

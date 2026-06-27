@@ -1,0 +1,33 @@
+name: 매일 아침 시장 점검 갱신
+
+on:
+  schedule:
+    # GitHub Actions는 UTC 기준. 오전 7시 KST = 22:00 UTC (전날)
+    - cron: "0 22 * * *"
+  workflow_dispatch: {} # 수동 실행 버튼
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 지표 조회 + AI 해석 생성
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/fetch.mjs
+
+      - name: daily.json 커밋
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add public/daily.json
+          git diff --staged --quiet || git commit -m "chore: 일일 지표 갱신 $(date -u +%Y-%m-%d)"
+          git push

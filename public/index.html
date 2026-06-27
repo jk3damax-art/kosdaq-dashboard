@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>아침 시장 점검</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --line: #21262d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --up: #f85149;     /* 한국식: 상승=빨강 */
+    --down: #3fb950;   /* 하락=초록 */
+    --accent: #58a6ff;
+    --warn: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    line-height: 1.55; padding: 20px; max-width: 760px; margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { margin: 8px 0 20px; }
+  h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .updated { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  /* 로그인 */
+  #gate {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; z-index: 10; padding: 20px;
+  }
+  #gate input {
+    background: var(--card); border: 1px solid var(--line); color: var(--text);
+    padding: 12px 16px; border-radius: 10px; font-size: 16px; width: 100%; max-width: 280px;
+  }
+  #gate button {
+    background: var(--accent); color: #0d1117; border: none; font-weight: 700;
+    padding: 12px 24px; border-radius: 10px; font-size: 15px; cursor: pointer;
+  }
+  #gate .hint { color: var(--muted); font-size: 12px; }
+  #gateErr { color: var(--up); font-size: 13px; min-height: 16px; }
+
+  /* AI 해석 박스 */
+  .ai {
+    background: linear-gradient(135deg, #161b22, #1c2333);
+    border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 18px;
+  }
+  .ai .tag { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0.5px; }
+  .ai .reading { font-size: 16px; margin: 10px 0 14px; }
+  .ai .mindset {
+    font-size: 14px; color: var(--muted); border-left: 3px solid var(--accent);
+    padding-left: 12px; font-style: italic;
+  }
+
+  /* 지표 카드 그리드 */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card .label { font-size: 13px; color: var(--muted); }
+  .card .price { font-size: 26px; font-weight: 700; margin-top: 6px; letter-spacing: -0.5px; }
+  .card .chg { font-size: 13px; font-weight: 600; margin-top: 2px; }
+  .card .note { font-size: 11px; color: var(--muted); margin-top: 6px; min-height: 14px; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .flat { color: var(--muted); }
+  svg.spark { width: 100%; height: 36px; margin-top: 10px; display: block; }
+
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px; margin-top: 8px;
+  }
+  .badge.calm { background: rgba(63,185,80,.15); color: var(--down); }
+  .badge.watch { background: rgba(210,153,34,.15); color: var(--warn); }
+  .badge.fear { background: rgba(248,81,73,.15); color: var(--up); }
+  /* VIX 색깔 눈금 막대 */
+  .gauge {
+    position: relative; height: 7px; border-radius: 4px; margin-top: 12px;
+    background: linear-gradient(90deg, #3fb950 0%, #d29922 55%, #f85149 100%);
+  }
+  .gauge-marker {
+    position: absolute; top: -3px; width: 3px; height: 13px; background: #fff;
+    border-radius: 2px; transform: translateX(-50%); box-shadow: 0 0 5px rgba(0,0,0,.7);
+  }
+  .gauge-labels {
+    display: flex; justify-content: space-between; font-size: 9px;
+    color: var(--muted); margin-top: 4px;
+  }
+
+  footer { color: var(--muted); font-size: 11px; text-align: center; margin: 24px 0 8px; }
+  .err { color: var(--warn); font-size: 12px; }
+
+  /* 보유 종목 섹션 */
+  .section-title { font-size: 15px; font-weight: 700; margin: 26px 0 12px; letter-spacing: -0.3px; }
+  .stock {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px; margin-bottom: 12px;
+  }
+  .stock-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .stock-name { font-size: 15px; font-weight: 700; }
+  .stock-code { font-size: 11px; color: var(--muted); margin-left: 6px; font-weight: 400; }
+  .stock-price { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .stock-chg { font-size: 13px; font-weight: 600; }
+  /* 52주 위치 막대 */
+  .range { position: relative; height: 6px; border-radius: 4px; margin: 12px 0 4px;
+    background: linear-gradient(90deg, #3fb950, #d29922, #f85149); }
+  .range-marker { position: absolute; top: -3px; width: 3px; height: 12px; background: #fff;
+    border-radius: 2px; transform: translateX(-50%); box-shadow: 0 0 5px rgba(0,0,0,.7); }
+  .range-labels { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }
+  .stock-note { font-size: 13px; margin: 12px 0 4px; line-height: 1.5; }
+  .tags { margin: 6px 0; }
+  .tag-chip { display: inline-block; font-size: 10px; background: rgba(88,166,255,.12);
+    color: var(--accent); padding: 2px 8px; border-radius: 999px; margin-right: 5px; }
+  .news { list-style: none; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .news li { font-size: 12px; color: var(--muted); padding: 3px 0; line-height: 1.4; }
+  .news li::before { content: "📰 "; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <h1>☕ 아침 시장 점검</h1>
+    <div class="updated" id="updated">불러오는 중…</div>
+  </header>
+
+  <div class="ai" id="aiBox">
+    <div class="tag">오늘의 계기판 읽기</div>
+    <div class="reading" id="aiReading">…</div>
+    <div class="mindset" id="aiMindset">…</div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <h2 class="section-title">📌 내 종목 관찰 일지</h2>
+  <div id="holdings"></div>
+
+  <footer>
+    지표는 미래를 맞히는 점쟁이가 아니라 운전 계기판입니다.<br />
+    종목 코멘트는 그날의 사실 정리일 뿐, 예측·매매 권유가 아닙니다.<br />
+    투자 판단과 책임은 본인에게 있습니다.
+  </footer>
+</div>
+
+<script>
+// 암호 없이 바로 데이터 로드 (링크 아는 사람만 보는 방식)
+loadData();
+
+// ── 데이터 로드 & 렌더 ───────────────────────────────────────────
+async function loadData() {
+  try {
+    const res = await fetch("./daily.json?t=" + Date.now());
+    if (!res.ok) throw new Error("daily.json 없음");
+    const d = await res.json();
+    render(d);
+  } catch (e) {
+    document.getElementById("updated").innerHTML =
+      '<span class="err">데이터를 아직 못 불러왔어요. 매일 오전 7시 갱신 예정.</span>';
+  }
+}
+
+function fmt(n, unit) {
+  if (n == null) return "확인필요";
+  const s = n.toLocaleString("ko-KR", { maximumFractionDigits: unit === "%" ? 2 : 2 });
+  return unit === "%" ? s + "%" : unit === "원" ? s + "원" : s;
+}
+
+function chgClass(p) { return p > 0 ? "up" : p < 0 ? "down" : "flat"; }
+function chgText(p) {
+  if (p == null) return "";
+  const sign = p > 0 ? "▲" : p < 0 ? "▼" : "─";
+  return `${sign} ${Math.abs(p).toFixed(2)}%`;
+}
+
+// 미니 스파크라인 SVG
+function spark(hist, cls) {
+  if (!hist || hist.length < 2) return "";
+  const w = 200, h = 36, min = Math.min(...hist), max = Math.max(...hist);
+  const range = max - min || 1;
+  const pts = hist.map((v, i) => {
+    const x = (i / (hist.length - 1)) * w;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const color = cls === "up" ? "#f85149" : cls === "down" ? "#3fb950" : "#8b949e";
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8"
+      stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+// VIX 상태 뱃지
+function vixBadge(v) {
+  if (v == null) return "";
+  if (v < 20) return '<span class="badge calm">😌 평온</span>';
+  if (v < 30) return '<span class="badge watch">😟 경계</span>';
+  return '<span class="badge fear">😱 시장이 겁먹음</span>';
+}
+// VIX 색깔 눈금 막대 (0~40 범위로 위치 표시)
+function vixGauge(v) {
+  if (v == null) return "";
+  const pct = Math.max(0, Math.min(100, (v / 40) * 100));
+  return `
+    <div class="gauge"><div class="gauge-marker" style="left:${pct}%"></div></div>
+    <div class="gauge-labels"><span>0 평온</span><span>20</span><span>30</span><span>40 공포</span></div>`;
+}
+// VIX 한 줄 설명
+function vixNote(v) {
+  if (v == null) return "";
+  if (v < 20) return "지금은 낮은 편 = 시장이 평온해요";
+  if (v < 30) return "약간 높은 편 = 시장이 긴장하기 시작";
+  return "높은 편 = 공포가 크다는 건 이미 많이 반영됐을 수도";
+}
+// 환율 영향 설명 (코스닥 투자자 관점)
+function fxNote(price, chgPct) {
+  if (price == null) return "";
+  let level;
+  if (price >= 1450) level = "원화가 약한(고환율) 편 = 외국인이 한국 주식 팔기 쉬운 환경 → 코스닥엔 부담될 수 있어요.";
+  else if (price <= 1250) level = "원화가 강한(저환율) 편 = 외국인 자금 유입에 우호적 → 코스닥엔 좋은 편.";
+  else level = "환율은 무난한 수준이에요.";
+  const dir = chgPct > 0 ? " (오늘은 환율↑ 원화 약세)" :
+              chgPct < 0 ? " (오늘은 환율↓ 원화 강세)" : "";
+  return level + dir;
+}
+
+// 금리 속도 노트
+function rateNote(vel) {
+  if (vel == null) return "";
+  if (vel >= 0.2) return `최근 5일 +${vel}%p · 빠르게 오르는 중 (성장주 부담)`;
+  if (vel <= -0.2) return `최근 5일 ${vel}%p · 내려오는 중`;
+  return `최근 5일 ${vel >= 0 ? "+" : ""}${vel}%p · 완만`;
+}
+
+function render(d) {
+  document.getElementById("updated").textContent = "업데이트: " + (d.updatedAt || "—");
+
+  // AI 해석
+  document.getElementById("aiReading").textContent = d.ai?.reading || "—";
+  document.getElementById("aiMindset").textContent = d.ai?.mindset || "";
+
+  // 카드 4개
+  const m = d.metrics || {};
+  const order = ["kosdaq", "ust10y", "vix", "usdkrw"];
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+
+  for (const key of order) {
+    const x = m[key];
+    if (!x) continue;
+    const cls = chgClass(x.changePct);
+    let note = "";
+    let badge = "";
+    let gauge = "";
+    if (key === "ust10y") note = rateNote(d.rateVelocity);
+    if (key === "vix") { badge = vixBadge(x.price); gauge = vixGauge(x.price); note = vixNote(x.price); }
+    if (key === "usdkrw") note = fxNote(x.price, x.changePct);
+    // VIX는 흐름 차트(최근 추이) + 눈금 막대(지금 위치)를 함께 표시
+    const visual = key === "vix" ? spark(x.history, cls) + gauge : spark(x.history, cls);
+
+    grid.insertAdjacentHTML("beforeend", `
+      <div class="card">
+        <div class="label">${x.label}</div>
+        <div class="price">${fmt(x.price, x.unit)}</div>
+        <div class="chg ${cls}">${chgText(x.changePct)}</div>
+        ${badge}
+        ${visual}
+        <div class="note">${note}</div>
+      </div>
+    `);
+  }
+
+  // 보유 종목 관찰 일지
+  renderHoldings(d.holdings || []);
+}
+
+// 52주 위치 한 줄 설명
+function rangeWord(p) {
+  if (p == null) return "";
+  if (p >= 80) return "연중 고점 부근 (비싼 구간)";
+  if (p >= 55) return "연중 중상단";
+  if (p >= 30) return "연중 중간쯤";
+  return "연중 저점 부근 (싼 구간)";
+}
+
+function renderHoldings(holdings) {
+  const box = document.getElementById("holdings");
+  box.innerHTML = "";
+  if (!holdings.length) {
+    box.innerHTML = '<div class="stock"><div class="stock-note">종목 데이터를 불러오는 중…</div></div>';
+    return;
+  }
+  for (const h of holdings) {
+    const cls = chgClass(h.changePct);
+    const rp = h.rangePct;
+    const rangeBar = rp == null ? "" : `
+      <div class="range"><div class="range-marker" style="left:${rp}%"></div></div>
+      <div class="range-labels"><span>연저점</span><span>${rangeWord(rp)}</span><span>연고점</span></div>`;
+    const tags = (h.ai?.tags || []).map((t) => `<span class="tag-chip">#${t}</span>`).join("");
+    const news = (h.news || []).slice(0, 3).map((n) => `<li>${n.title}</li>`).join("");
+
+    box.insertAdjacentHTML("beforeend", `
+      <div class="stock">
+        <div class="stock-head">
+          <div><span class="stock-name">${h.label}</span><span class="stock-code">${h.code}</span></div>
+          <div style="text-align:right">
+            <div class="stock-price">${fmt(h.price, h.unit)}</div>
+            <div class="stock-chg ${cls}">${chgText(h.changePct)}</div>
+          </div>
+        </div>
+        ${spark(h.history, cls)}
+        ${rangeBar}
+        <div class="stock-note">${h.ai?.note || ""}</div>
+        <div class="tags">${tags}</div>
+        ${news ? `<ul class="news">${news}</ul>` : ""}
+      </div>
+    `);
+  }
+}
+</script>
+</body>
+</html>
