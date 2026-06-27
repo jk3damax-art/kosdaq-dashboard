@@ -70,7 +70,9 @@ async function fetchYahoo(symbol) {
     (v) => v != null
   );
   const price = meta.regularMarketPrice ?? closes.at(-1);
-  const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? closes.at(-2);
+  // '전일 대비'는 바로 직전 거래일 종가로 계산해야 한다.
+  // (range=1mo의 chartPreviousClose는 한 달 전 값이라 등락률이 왜곡됨)
+  const prevClose = closes.length >= 2 ? closes.at(-2) : meta.chartPreviousClose ?? null;
   const changePct =
     price != null && prevClose ? ((price - prevClose) / prevClose) * 100 : null;
 
@@ -211,7 +213,11 @@ async function aiHoldingNote(holding) {
     return parsed || { note: "AI 코멘트 생성 실패. 아래 뉴스 제목을 직접 확인해줘.", tags: [] };
   } catch (err) {
     console.error(`[ai] ${holding.label} 코멘트 실패:`, err.message);
-    return { note: "AI 코멘트 생성 실패. 아래 뉴스 제목을 직접 확인해줘.", tags: [] };
+    return {
+      note: "AI 코멘트 생성 실패. 아래 뉴스 제목을 직접 확인해줘.",
+      tags: [],
+      debugError: String(err.message).slice(0, 300), // 진단용 (원인 파악되면 제거)
+    };
   }
 }
 
@@ -261,6 +267,7 @@ async function aiInterpret(metrics) {
       ok: false,
       reading: "AI 해석 생성에 실패했어. 아래 수치를 직접 확인해줘.",
       mindset: "데이터는 계기판일 뿐. 오늘도 차분하게.",
+      debugError: String(err.message).slice(0, 300), // 진단용 (원인 파악되면 제거)
     };
   }
 }
