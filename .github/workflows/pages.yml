@@ -25,6 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true # Pages가 아직 안 켜져 있어도 자동으로 켜기
       - name: public 폴더를 배포 대상으로 업로드
         uses: actions/upload-pages-artifact@v3
         with:
