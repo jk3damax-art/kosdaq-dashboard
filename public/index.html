@@ -135,11 +135,16 @@
     background: var(--accent); color: #0d1117; border: none; font-weight: 700;
     padding: 0 16px; border-radius: 10px; font-size: 14px; cursor: pointer; white-space: nowrap;
   }
-  .name-row { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-  .name-row input {
-    background: transparent; border: none; border-bottom: 1px solid var(--line);
-    color: var(--accent); font-size: 12px; width: 80px; padding: 2px 4px;
+  .name-row { font-size: 12px; color: var(--muted); margin-bottom: 10px; display: flex;
+    align-items: center; gap: 6px; }
+  .who-btn {
+    background: var(--card); border: 1px solid var(--line); color: var(--muted);
+    padding: 5px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
   }
+  .who-btn.active { background: var(--accent); color: #0d1117; border-color: var(--accent);
+    font-weight: 700; }
+  .who-change { font-size: 11px; color: var(--muted); margin-bottom: 10px; cursor: pointer;
+    text-decoration: underline; }
   .memo { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     padding: 12px 14px; margin-bottom: 8px; position: relative; }
   .memo .meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
@@ -170,7 +175,11 @@
   <div id="holdings"></div>
 
   <h2 class="section-title">💬 둘만의 메모</h2>
-  <div class="name-row">내 이름: <input id="memoName" placeholder="이름" maxlength="20" /></div>
+  <div class="name-row" id="whoRow">
+    나는 →
+    <button class="who-btn" data-who="김진욱">김진욱</button>
+    <button class="who-btn" data-who="서동범">서동범</button>
+  </div>
   <div class="memo-write">
     <input id="memoText" placeholder="종목·시장 메모 남기기 (예: HLB FDA D-30)" maxlength="500" />
     <button id="memoSend">남기기</button>
@@ -199,16 +208,42 @@ if ("serviceWorker" in navigator) {
 // 구글 Apps Script 웹앱 배포 URL을 여기에 넣으면 활성화됩니다.
 const MEMO_API = "https://script.google.com/macros/s/AKfycbwS0hrH9UZX7Qb6smktTLJifU9vUtS0vQsajvIEZ3GScN72FZQAKz9yDI7g6szX-HVG/exec";
 
-const memoName = document.getElementById("memoName");
+const whoRow = document.getElementById("whoRow");
 const memoText = document.getElementById("memoText");
 const memoSend = document.getElementById("memoSend");
 const memoList = document.getElementById("memoList");
 
-// 내 이름은 이 기기에 기억
-memoName.value = localStorage.getItem("memoName") || "";
-memoName.addEventListener("change", () =>
-  localStorage.setItem("memoName", memoName.value.trim())
-);
+// 이 기기의 사용자가 누구인지 (김진욱 / 서동범). 한 번 고르면 기억됨.
+function getWho() { return localStorage.getItem("memoName") || ""; }
+
+function renderWhoRow() {
+  const who = getWho();
+  if (who) {
+    // 이미 고른 상태: 이름 표시 + 바꾸기 링크
+    whoRow.className = "who-change";
+    whoRow.innerHTML = `나: <b style="color:var(--accent)">${who}</b> (바꾸기)`;
+  } else {
+    // 아직 안 고른 상태: 두 버튼
+    whoRow.className = "name-row";
+    whoRow.innerHTML = `나는 →
+      <button class="who-btn" data-who="김진욱">김진욱</button>
+      <button class="who-btn" data-who="서동범">서동범</button>`;
+  }
+}
+whoRow.addEventListener("click", (e) => {
+  const btn = e.target.closest(".who-btn");
+  if (btn) {
+    localStorage.setItem("memoName", btn.dataset.who);
+    renderWhoRow();
+    return;
+  }
+  // "바꾸기" 링크(전체 영역) 클릭 시 다시 선택 화면으로
+  if (whoRow.classList.contains("who-change")) {
+    localStorage.removeItem("memoName");
+    renderWhoRow();
+  }
+});
+renderWhoRow();
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) =>
@@ -264,8 +299,8 @@ async function sendMemo() {
   const text = memoText.value.trim();
   if (!text) return;
   if (!MEMO_API) { alert("메모 기능은 구글 시트 연결 후 켜져요."); return; }
-  const name = memoName.value.trim() || "익명";
-  localStorage.setItem("memoName", name);
+  const name = getWho();
+  if (!name) { alert("먼저 '나는 →'에서 이름(김진욱/서동범)을 골라주세요."); return; }
   memoSend.disabled = true;
   try {
     await fetch(MEMO_API, {
