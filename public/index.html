@@ -143,8 +143,20 @@
   }
   .who-btn.active { background: var(--accent); color: #0d1117; border-color: var(--accent);
     font-weight: 700; }
-  .who-change { font-size: 11px; color: var(--muted); margin-bottom: 10px; cursor: pointer;
-    text-decoration: underline; }
+  .who-change { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .who-change b { color: var(--accent); }
+  .who-change .change-link { cursor: pointer; text-decoration: underline; margin-left: 4px; }
+  /* '나는 누구?' 선택 모달 */
+  .who-modal { position: fixed; inset: 0; background: rgba(0,0,0,.75);
+    display: flex; align-items: center; justify-content: center; z-index: 20; padding: 24px; }
+  .who-box { background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 24px; text-align: center; max-width: 320px; width: 100%; }
+  .who-title { font-size: 18px; font-weight: 700; }
+  .who-sub { font-size: 13px; color: var(--muted); margin: 6px 0 20px; }
+  .who-pick { display: block; width: 100%; background: var(--accent); color: #0d1117;
+    border: none; font-size: 17px; font-weight: 700; padding: 15px; border-radius: 12px;
+    margin-top: 10px; cursor: pointer; }
+  .who-pick[data-who="서동범"] { background: #2ea043; }
   .memo { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     padding: 12px 14px; margin-bottom: 8px; position: relative; }
   .memo .meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
@@ -175,16 +187,22 @@
   <div id="holdings"></div>
 
   <h2 class="section-title">💬 둘만의 메모</h2>
-  <div class="name-row" id="whoRow">
-    나는 →
-    <button class="who-btn" data-who="김진욱">김진욱</button>
-    <button class="who-btn" data-who="서동범">서동범</button>
-  </div>
+  <div class="who-change" id="whoRow"></div>
   <div class="memo-write">
     <input id="memoText" placeholder="종목·시장 메모 남기기 (예: HLB FDA D-30)" maxlength="500" />
     <button id="memoSend">남기기</button>
   </div>
   <div id="memoList"></div>
+
+  <!-- 처음 한 번만 뜨는 '나는 누구?' 선택 창 -->
+  <div id="whoModal" class="who-modal" style="display:none">
+    <div class="who-box">
+      <div class="who-title">나는 누구인가요?</div>
+      <div class="who-sub">한 번만 고르면 계속 기억해요</div>
+      <button class="who-pick" data-who="김진욱">김진욱</button>
+      <button class="who-pick" data-who="서동범">서동범</button>
+    </div>
+  </div>
 
   <footer>
     지표는 미래를 맞히는 점쟁이가 아니라 운전 계기판입니다.<br />
@@ -218,41 +236,43 @@ if ("serviceWorker" in navigator) {
 const MEMO_API = "https://script.google.com/macros/s/AKfycbwS0hrH9UZX7Qb6smktTLJifU9vUtS0vQsajvIEZ3GScN72FZQAKz9yDI7g6szX-HVG/exec";
 
 const whoRow = document.getElementById("whoRow");
+const whoModal = document.getElementById("whoModal");
 const memoText = document.getElementById("memoText");
 const memoSend = document.getElementById("memoSend");
 const memoList = document.getElementById("memoList");
 
-// 이 기기의 사용자가 누구인지 (김진욱 / 서동범). 한 번 고르면 기억됨.
+// 이 기기의 사용자가 누구인지 (김진욱 / 서동범). 한 번 고르면 계속 기억됨.
 function getWho() { return localStorage.getItem("memoName") || ""; }
 
+// 이름 표시줄: 고른 이름 + 작게 '바꾸기'
 function renderWhoRow() {
   const who = getWho();
-  if (who) {
-    // 이미 고른 상태: 이름 표시 + 바꾸기 링크
-    whoRow.className = "who-change";
-    whoRow.innerHTML = `나: <b style="color:var(--accent)">${who}</b> (바꾸기)`;
-  } else {
-    // 아직 안 고른 상태: 두 버튼
-    whoRow.className = "name-row";
-    whoRow.innerHTML = `나는 →
-      <button class="who-btn" data-who="김진욱">김진욱</button>
-      <button class="who-btn" data-who="서동범">서동범</button>`;
-  }
+  whoRow.innerHTML = who
+    ? `나: <b>${who}</b><span class="change-link" id="changeWho">바꾸기</span>`
+    : "";
 }
-whoRow.addEventListener("click", (e) => {
-  const btn = e.target.closest(".who-btn");
-  if (btn) {
-    localStorage.setItem("memoName", btn.dataset.who);
-    renderWhoRow();
-    return;
-  }
-  // "바꾸기" 링크(전체 영역) 클릭 시 다시 선택 화면으로
-  if (whoRow.classList.contains("who-change")) {
-    localStorage.removeItem("memoName");
-    renderWhoRow();
-  }
+
+// 선택 모달 열기/닫기
+function openWhoModal() { whoModal.style.display = "flex"; }
+function closeWhoModal() { whoModal.style.display = "none"; }
+
+// 모달 버튼 클릭 → 이름 저장, 모달 닫기
+whoModal.addEventListener("click", (e) => {
+  const pick = e.target.closest(".who-pick");
+  if (!pick) return;
+  localStorage.setItem("memoName", pick.dataset.who);
+  renderWhoRow();
+  closeWhoModal();
 });
+
+// '바꾸기' 클릭 → 다시 선택 모달
+whoRow.addEventListener("click", (e) => {
+  if (e.target.id === "changeWho") openWhoModal();
+});
+
+// 앱 처음 열렸는데 아직 이름을 안 골랐으면 선택 모달을 띄움
 renderWhoRow();
+if (!getWho()) openWhoModal();
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) =>
@@ -309,7 +329,7 @@ async function sendMemo() {
   if (!text) return;
   if (!MEMO_API) { alert("메모 기능은 구글 시트 연결 후 켜져요."); return; }
   const name = getWho();
-  if (!name) { alert("먼저 '나는 →'에서 이름(김진욱/서동범)을 골라주세요."); return; }
+  if (!name) { openWhoModal(); return; } // 이름 안 골랐으면 선택 모달부터
   memoSend.disabled = true;
   try {
     await fetch(MEMO_API, {
