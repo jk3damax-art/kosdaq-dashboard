@@ -1,4 +1,4 @@
-name: 매일 아침 시장 점검 갱신
+name: 매일 아침 시장 점검 갱신 + 배포
 
 on:
   schedule:
@@ -8,22 +8,27 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+# 동시에 여러 번 돌지 않도록
+concurrency:
+  group: daily
+  cancel-in-progress: false
 
 jobs:
+  # 1단계: 지표·뉴스·AI 코멘트 새로 만들어 커밋
   refresh:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: 지표 조회 + AI 해석 생성
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node scripts/fetch.mjs
-
       - name: daily.json 커밋
         run: |
           git config user.name "github-actions"
@@ -31,3 +36,24 @@ jobs:
           git add public/daily.json
           git diff --staged --quiet || git commit -m "chore: 일일 지표 갱신 $(date -u +%Y-%m-%d)"
           git push
+
+  # 2단계: 위에서 갱신이 끝나면 이어서 앱(웹) 배포 → 친구가 보는 화면에 바로 반영
+  deploy:
+    needs: refresh
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main # refresh가 방금 커밋한 최신 데이터를 받기
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: public 폴더 업로드
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@v4
