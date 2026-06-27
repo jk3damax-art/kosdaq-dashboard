@@ -200,7 +200,16 @@ loadData();
 // 앱(PWA) 등록 - 홈 화면 추가 + 전체화면 실행 + 오프라인 마지막 화면
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      reg.update(); // 열 때마다 새 버전 확인
+      // 새 서비스워커가 준비되면 즉시 적용
+      reg.addEventListener("updatefound", () => {
+        const sw = reg.installing;
+        if (sw) sw.addEventListener("statechange", () => {
+          if (sw.state === "activated") location.reload();
+        });
+      });
+    }).catch(() => {});
   });
 }
 
