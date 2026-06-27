@@ -13,7 +13,9 @@ const OUT = resolve(__dirname, "../public/daily.json");
 
 // Gemini 호출 공용 함수 -------------------------------------------------------
 // system + user 프롬프트를 받아 JSON 객체를 돌려준다. 실패 시 null.
-const GEMINI_MODEL = "gemini-2.0-flash"; // 무료 등급에서 쓸 수 있는 빠른 모델
+const GEMINI_MODEL = "gemini-flash-latest"; // 무료 등급에서 쓸 수 있는 빠른 모델(최신)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function callGemini(systemText, userText) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
@@ -26,15 +28,26 @@ async function callGemini(systemText, userText) {
     contents: [{ role: "user", parts: [{ text: userText }] }],
     generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
   };
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${await res.text()}`);
-  const json = await res.json();
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
-  return JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
+
+  // 429(사용량 초과)는 무료 등급에서 흔하므로, 최대 3번까지 점점 길게 쉬었다 재시도
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(attempt * 20000); // 0s → 20s → 40s 대기
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const text =
+        json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
+      return JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
+    }
+    lastErr = `Gemini HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
+    if (res.status !== 429) break; // 429가 아니면 재시도 무의미
+  }
+  throw new Error(lastErr);
 }
 
 // 조회할 시장 지표 정의 ------------------------------------------------------
