@@ -1,8 +1,8 @@
 // 매일 오전 7시(KST)에 실행되어 지표를 조회하고 AI 해석을 생성한 뒤
 // public/daily.json 으로 저장한다. (GitHub Actions에서 구동)
 //
-// 데이터 소스: Yahoo Finance 차트 API (무료, 키 불필요)
-// AI 해석:     Claude API (환경변수 ANTHROPIC_API_KEY, 없으면 해석은 건너뜀)
+// 데이터 소스: Yahoo Finance 차트 API + 구글 뉴스 RSS (무료, 키 불필요)
+// AI 해석:     Google Gemini API (환경변수 GEMINI_API_KEY, 무료 등급, 없으면 해석 건너뜀)
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -10,6 +10,32 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(__dirname, "../public/daily.json");
+
+// Gemini 호출 공용 함수 -------------------------------------------------------
+// system + user 프롬프트를 받아 JSON 객체를 돌려준다. 실패 시 null.
+const GEMINI_MODEL = "gemini-2.0-flash"; // 무료 등급에서 쓸 수 있는 빠른 모델
+async function callGemini(systemText, userText) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
+    `?key=${key}`;
+  const body = {
+    // system 지시 + 사용자 입력을 합쳐 전달, JSON으로만 답하도록 강제
+    systemInstruction: { parts: [{ text: systemText }] },
+    contents: [{ role: "user", parts: [{ text: userText }] }],
+    generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
+  };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${await res.text()}`);
+  const json = await res.json();
+  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
+  return JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
+}
 
 // 조회할 시장 지표 정의 ------------------------------------------------------
 const SYMBOLS = {
@@ -155,9 +181,8 @@ async function fetchHoldings() {
 // 보유 종목별 '관찰 일지' 한 줄 생성 (Claude) --------------------------------
 // 핵심: 미래 예측·매매 권유 절대 금지. 그날의 사실(가격 위치 + 뉴스)만 차분히 요약.
 async function aiHoldingNote(holding) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    return "AI 코멘트 비활성화 (API 키 미설정). 아래 뉴스 제목을 직접 확인해줘.";
+  if (!process.env.GEMINI_API_KEY) {
+    return "AI 코멘트 비활성화 (GEMINI_API_KEY 미설정). 아래 뉴스 제목을 직접 확인해줘.";
   }
   const headlines = (holding.news || [])
     .map((n, i) => `${i + 1}. ${n.title}`)
@@ -178,41 +203,24 @@ async function aiHoldingNote(holding) {
 할 일: 위 사실(가격 위치 + 뉴스 제목)을 바탕으로, 친구에게 담담하게 상황을 알려주는 2~3문장. 끝에 판단은 본인 몫이라는 뉘앙스.
 출력: JSON만. {"note":"2~3문장 관찰 코멘트","tags":["핵심 키워드 1~3개"]}`;
 
-  const body = {
-    model: "claude-sonnet-4-6",
-    max_tokens: 500,
-    system,
-    messages: [{ role: "user", content: `${facts}\n\n위 원칙대로 JSON으로만 답해줘.` }],
-  };
-
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    const json = await res.json();
-    const text = json.content?.[0]?.text?.trim() || "{}";
-    const parsed = JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
-    return parsed;
+    const parsed = await callGemini(
+      system,
+      `${facts}\n\n위 원칙대로 JSON으로만 답해줘.`
+    );
+    return parsed || { note: "AI 코멘트 생성 실패. 아래 뉴스 제목을 직접 확인해줘.", tags: [] };
   } catch (err) {
     console.error(`[ai] ${holding.label} 코멘트 실패:`, err.message);
     return { note: "AI 코멘트 생성 실패. 아래 뉴스 제목을 직접 확인해줘.", tags: [] };
   }
 }
 
-// Claude API로 '경계등 해석' 생성 -------------------------------------------
+// Gemini로 '경계등 해석' 생성 ------------------------------------------------
 async function aiInterpret(metrics) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
+  if (!process.env.GEMINI_API_KEY) {
     return {
       ok: false,
-      reading: "AI 해석 비활성화 (ANTHROPIC_API_KEY 미설정). 지표 수치만 표시합니다.",
+      reading: "AI 해석 비활성화 (GEMINI_API_KEY 미설정). 지표 수치만 표시합니다.",
       mindset: "데이터는 점쟁이가 아니라 계기판이야. 오늘도 차분하게.",
     };
   }
@@ -241,29 +249,11 @@ async function aiInterpret(metrics) {
 출력 형식(JSON만, 다른 말 금지):
 {"reading":"오늘 계기판 상태를 담담히 묘사한 2~3문장 (예언 아님, 상태 묘사)","mindset":"불안을 부추기지 않고 무리한 매매를 권하지 않는 따뜻한 1문장"}`;
 
-  const body = {
-    model: "claude-sonnet-4-6",
-    max_tokens: 600,
-    system,
-    messages: [
-      { role: "user", content: `오늘의 지표:\n${facts}\n\n위 원칙대로 JSON으로만 답해줘.` },
-    ],
-  };
-
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    const json = await res.json();
-    const text = json.content?.[0]?.text?.trim() || "{}";
-    const parsed = JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
+    const parsed = await callGemini(
+      system,
+      `오늘의 지표:\n${facts}\n\n위 원칙대로 JSON으로만 답해줘.`
+    );
     return { ok: true, ...parsed };
   } catch (err) {
     console.error("[ai] 해석 실패:", err.message);

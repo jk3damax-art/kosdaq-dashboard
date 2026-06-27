@@ -21,7 +21,7 @@ jobs:
 
       - name: 지표 조회 + AI 해석 생성
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node scripts/fetch.mjs
 
       - name: daily.json 커밋

@@ -39,12 +39,13 @@ git branch -M main
 git push -u origin main
 ```
 
-### 2) Claude API 키 등록 (AI 해석용)
+### 2) Gemini API 키 등록 (AI 해석용, 무료)
 GitHub 저장소 → **Settings → Secrets and variables → Actions → New repository secret**
-- 이름: `ANTHROPIC_API_KEY`
-- 값: `sk-ant-...` (https://console.anthropic.com 에서 발급)
+- 이름: `GEMINI_API_KEY`
+- 값: https://aistudio.google.com/apikey 에서 무료 발급한 키
 
 > 키를 안 넣어도 동작합니다. 그 경우 AI 해석 대신 지표 수치만 표시돼요.
+> 하루 1회 호출이라 Gemini 무료 등급 안에서 충분히 처리됩니다.
 
 ### 3) 자동 갱신 켜기
 GitHub 저장소 → **Actions** 탭 → 워크플로우 활성화 →
