@@ -1,6 +1,6 @@
 // 아주 단순한 서비스워커: 앱 껍데기를 캐시해 오프라인에서도 마지막 화면을 보여준다.
 // daily.json(데이터)은 항상 네트워크 우선으로 받아 최신을 유지한다.
-const CACHE = "market-check-v1";
+const CACHE = "market-check-v2";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest",
   "./icon-192.png", "./icon-512.png"];
 

@@ -124,6 +124,30 @@
   .news { list-style: none; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
   .news li { font-size: 12px; color: var(--muted); padding: 3px 0; line-height: 1.4; }
   .news li::before { content: "📰 "; }
+
+  /* 둘만의 메모장 */
+  .memo-write { display: flex; gap: 8px; margin-bottom: 12px; }
+  .memo-write input {
+    flex: 1; background: var(--card); border: 1px solid var(--line); color: var(--text);
+    padding: 11px 14px; border-radius: 10px; font-size: 14px; min-width: 0;
+  }
+  .memo-write button {
+    background: var(--accent); color: #0d1117; border: none; font-weight: 700;
+    padding: 0 16px; border-radius: 10px; font-size: 14px; cursor: pointer; white-space: nowrap;
+  }
+  .name-row { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .name-row input {
+    background: transparent; border: none; border-bottom: 1px solid var(--line);
+    color: var(--accent); font-size: 12px; width: 80px; padding: 2px 4px;
+  }
+  .memo { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 8px; position: relative; }
+  .memo .meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .memo .who { color: var(--accent); font-weight: 700; }
+  .memo .body { font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .memo .del { position: absolute; top: 8px; right: 10px; color: var(--muted);
+    background: none; border: none; cursor: pointer; font-size: 14px; }
+  .memo-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 0; }
 </style>
 </head>
 <body>
@@ -145,6 +169,14 @@
   <h2 class="section-title">📌 내 종목 관찰 일지</h2>
   <div id="holdings"></div>
 
+  <h2 class="section-title">💬 둘만의 메모</h2>
+  <div class="name-row">내 이름: <input id="memoName" placeholder="이름" maxlength="20" /></div>
+  <div class="memo-write">
+    <input id="memoText" placeholder="종목·시장 메모 남기기 (예: HLB FDA D-30)" maxlength="500" />
+    <button id="memoSend">남기기</button>
+  </div>
+  <div id="memoList"></div>
+
   <footer>
     지표는 미래를 맞히는 점쟁이가 아니라 운전 계기판입니다.<br />
     종목 코멘트는 그날의 사실 정리일 뿐, 예측·매매 권유가 아닙니다.<br />
@@ -162,6 +194,111 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
+
+// ── 둘만의 메모장 (구글 시트 연동) ───────────────────────────────
+// 구글 Apps Script 웹앱 배포 URL을 여기에 넣으면 활성화됩니다.
+const MEMO_API = ""; // 예: "https://script.google.com/macros/s/AKfy.../exec"
+
+const memoName = document.getElementById("memoName");
+const memoText = document.getElementById("memoText");
+const memoSend = document.getElementById("memoSend");
+const memoList = document.getElementById("memoList");
+
+// 내 이름은 이 기기에 기억
+memoName.value = localStorage.getItem("memoName") || "";
+memoName.addEventListener("change", () =>
+  localStorage.setItem("memoName", memoName.value.trim())
+);
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+}
+function timeAgo(iso) {
+  try {
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return "방금";
+    if (diff < 3600) return Math.floor(diff / 60) + "분 전";
+    if (diff < 86400) return Math.floor(diff / 3600) + "시간 전";
+    return new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+  } catch { return ""; }
+}
+
+async function loadMemos() {
+  if (!MEMO_API) {
+    memoList.innerHTML =
+      '<div class="memo-empty">메모 기능은 구글 시트 연결 후 켜져요.</div>';
+    return;
+  }
+  try {
+    const res = await fetch(MEMO_API);
+    const data = await res.json();
+    renderMemos(data.memos || []);
+  } catch {
+    memoList.innerHTML = '<div class="memo-empty">메모를 불러오지 못했어요.</div>';
+  }
+}
+
+function renderMemos(memos) {
+  if (!memos.length) {
+    memoList.innerHTML = '<div class="memo-empty">아직 메모가 없어요. 첫 메모를 남겨보세요.</div>';
+    return;
+  }
+  // 최신이 위로
+  memoList.innerHTML = memos
+    .slice()
+    .reverse()
+    .map(
+      (m) => `
+      <div class="memo">
+        <button class="del" data-ts="${m.ts}" title="삭제">✕</button>
+        <div class="meta"><span class="who">${escapeHtml(m.name || "익명")}</span> · ${timeAgo(m.ts)}</div>
+        <div class="body">${escapeHtml(m.text || "")}</div>
+      </div>`
+    )
+    .join("");
+}
+
+async function sendMemo() {
+  const text = memoText.value.trim();
+  if (!text) return;
+  if (!MEMO_API) { alert("메모 기능은 구글 시트 연결 후 켜져요."); return; }
+  const name = memoName.value.trim() || "익명";
+  localStorage.setItem("memoName", name);
+  memoSend.disabled = true;
+  try {
+    await fetch(MEMO_API, {
+      method: "POST",
+      // Apps Script는 단순요청이어야 CORS가 통과되므로 text/plain로 보냄
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "add", name, text }),
+    });
+    memoText.value = "";
+    await loadMemos();
+  } catch {
+    alert("메모 전송에 실패했어요. 잠시 후 다시 시도해줘.");
+  } finally {
+    memoSend.disabled = false;
+  }
+}
+
+memoSend.addEventListener("click", sendMemo);
+memoText.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMemo(); });
+memoList.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".del");
+  if (!btn || !MEMO_API) return;
+  if (!confirm("이 메모를 지울까요?")) return;
+  await fetch(MEMO_API, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action: "delete", ts: btn.dataset.ts }),
+  });
+  await loadMemos();
+});
+
+loadMemos();
+setInterval(loadMemos, 30000); // 30초마다 새 메모 확인
 
 // ── 데이터 로드 & 렌더 ───────────────────────────────────────────
 async function loadData() {
