@@ -29,10 +29,13 @@ async function callGemini(systemText, userText) {
     generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
   };
 
-  // 429(사용량 초과)는 무료 등급에서 흔하므로, 최대 3번까지 점점 길게 쉬었다 재시도
+  // 일시적 오류는 재시도로 넘긴다:
+  //   429 = 무료 등급 사용량 초과, 503 = 서버 과부하(high demand), 500 = 일시 서버 오류
+  // 이런 코드는 잠깐 기다렸다 다시 부르면 대개 성공한다. 최대 4번까지 점점 길게 대기.
+  const RETRYABLE = new Set([429, 500, 503]);
   let lastErr;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await sleep(attempt * 20000); // 0s → 20s → 40s 대기
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await sleep(attempt * 15000); // 0s → 15s → 30s → 45s 대기
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -45,7 +48,7 @@ async function callGemini(systemText, userText) {
       return JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
     }
     lastErr = `Gemini HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
-    if (res.status !== 429) break; // 429가 아니면 재시도 무의미
+    if (!RETRYABLE.has(res.status)) break; // 재시도해도 소용없는 오류면 즉시 중단
   }
   throw new Error(lastErr);
 }
