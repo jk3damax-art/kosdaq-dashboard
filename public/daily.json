@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-29 16:24 (KST)",
+  "updatedAt": "2026-06-29 16:40 (KST)",
   "rateVelocity": -0.08,
   "metrics": {
     "kospi": {
@@ -112,9 +112,9 @@
       "y": "^VIX",
       "label": "VIX(공포지수)",
       "unit": "",
-      "price": 18.41,
-      "prevClose": 18.89,
-      "changePct": -2.54,
+      "price": 18.54,
+      "prevClose": 18.41,
+      "changePct": 0.71,
       "history": [
         15.32,
         16.05,
@@ -135,7 +135,8 @@
         19.49,
         18.63,
         18.89,
-        18.41
+        18.41,
+        18.54
       ],
       "hi52": 35.3,
       "lo52": 13.38,
@@ -146,9 +147,9 @@
       "y": "KRW=X",
       "label": "원/달러 환율",
       "unit": "원",
-      "price": 1540.68,
+      "price": 1542.15,
       "prevClose": 1546.48,
-      "changePct": -0.38,
+      "changePct": -0.28,
       "history": [
         1495.29,
         1506.84,
@@ -171,7 +172,7 @@
         1535.25,
         1542.76,
         1546.48,
-        1540.68
+        1542.15
       ],
       "hi52": 1556.39,
       "lo52": 1322.42,
@@ -254,9 +255,9 @@
       "y": "CL=F",
       "label": "국제유가(WTI)",
       "unit": "$",
-      "price": 69.88,
+      "price": 69.89,
       "prevClose": 69.23,
-      "changePct": 0.94,
+      "changePct": 0.95,
       "history": [
         87.36,
         92.16,
@@ -278,11 +279,11 @@
         70.34,
         71.92,
         69.23,
-        69.88
+        69.89
       ],
       "hi52": 119.48,
       "lo52": 54.98,
-      "volume": 25599,
+      "volume": 26332,
       "ok": true
     }
   },
@@ -291,7 +292,7 @@
       "ok": true,
       "bizdate": "20260629",
       "foreign": -77332,
-      "institution": 29326,
+      "institution": 29327,
       "individual": 45975
     },
     "kosdaq": {
@@ -344,7 +345,7 @@
       ],
       "hi52": 82300,
       "lo52": 15940,
-      "volume": 252906,
+      "volume": 255829,
       "ok": true,
       "rangePct": 24,
       "news": [
@@ -410,7 +411,7 @@
       ],
       "hi52": 69200,
       "lo52": 36150,
-      "volume": 737305,
+      "volume": 717110,
       "ok": true,
       "rangePct": 45,
       "news": [
