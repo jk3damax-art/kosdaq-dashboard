@@ -13,29 +13,29 @@ const OUT = resolve(__dirname, "../public/daily.json");
 
 // Gemini 호출 공용 함수 -------------------------------------------------------
 // system + user 프롬프트를 받아 JSON 객체를 돌려준다. 실패 시 null.
-const GEMINI_MODEL = "gemini-flash-latest"; // 무료 등급에서 쓸 수 있는 빠른 모델(최신)
+//
+// 모델 폴백 체인: 앞 모델이 과부하(503 등)면 다음 모델로 자동 전환.
+// '-latest' 별칭은 트래픽이 몰려 503이 잦으므로, 버전 고정 모델을 우선 쓴다.
+//   1순위 gemini-2.5-flash      : 품질 좋고 빠름 (이 앱에 최적)
+//   2순위 gemini-2.0-flash      : 한 세대 전, 매우 안정적 (트래픽 분산)
+//   3순위 gemini-2.5-flash-lite : 가장 가벼움, 거의 안 막힘 (최후 보루)
+const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.5-flash-lite",
+];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function callGemini(systemText, userText) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+// 모델 1개로 호출 시도(재시도 포함). 과부하 등 일시 오류는 throw해서 다음 모델로 넘긴다.
+async function callGeminiModel(model, key, body) {
   const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` +
     `?key=${key}`;
-  const body = {
-    // system 지시 + 사용자 입력을 합쳐 전달, JSON으로만 답하도록 강제
-    systemInstruction: { parts: [{ text: systemText }] },
-    contents: [{ role: "user", parts: [{ text: userText }] }],
-    generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
-  };
-
-  // 일시적 오류는 재시도로 넘긴다:
-  //   429 = 무료 등급 사용량 초과, 503 = 서버 과부하(high demand), 500 = 일시 서버 오류
-  // 이런 코드는 잠깐 기다렸다 다시 부르면 대개 성공한다. 최대 4번까지 점점 길게 대기.
+  // 일시적 오류(429 한도, 503 과부하, 500 서버오류)는 잠깐 쉬었다 같은 모델로 재시도.
   const RETRYABLE = new Set([429, 500, 503]);
   let lastErr;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    if (attempt > 0) await sleep(attempt * 15000); // 0s → 15s → 30s → 45s 대기
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(attempt * 8000); // 0s → 8s → 16s
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -47,10 +47,33 @@ async function callGemini(systemText, userText) {
         json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
       return JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
     }
-    lastErr = `Gemini HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
-    if (!RETRYABLE.has(res.status)) break; // 재시도해도 소용없는 오류면 즉시 중단
+    lastErr = `HTTP ${res.status}: ${(await res.text()).slice(0, 150)}`;
+    if (!RETRYABLE.has(res.status)) break; // 재시도해도 소용없는 오류면 이 모델은 포기
   }
-  throw new Error(lastErr);
+  throw new Error(`[${model}] ${lastErr}`);
+}
+
+async function callGemini(systemText, userText) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const body = {
+    // system 지시 + 사용자 입력을 합쳐 전달, JSON으로만 답하도록 강제
+    systemInstruction: { parts: [{ text: systemText }] },
+    contents: [{ role: "user", parts: [{ text: userText }] }],
+    generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
+  };
+
+  // 모델을 순서대로 시도: 앞 모델이 끝까지 실패하면 다음 모델로 폴백.
+  let lastErr;
+  for (const model of GEMINI_MODELS) {
+    try {
+      return await callGeminiModel(model, key, body);
+    } catch (err) {
+      lastErr = err.message;
+      console.error(`[gemini] ${model} 실패 → 다음 모델 시도:`, err.message);
+    }
+  }
+  throw new Error(`모든 모델 실패. 마지막 오류: ${lastErr}`);
 }
 
 // 조회할 시장 지표 정의 ------------------------------------------------------
