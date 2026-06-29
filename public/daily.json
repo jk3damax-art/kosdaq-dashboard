@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-29 16:40 (KST)",
+  "updatedAt": "2026-06-29 16:54 (KST)",
   "rateVelocity": -0.08,
   "metrics": {
     "kospi": {
@@ -112,9 +112,9 @@
       "y": "^VIX",
       "label": "VIX(공포지수)",
       "unit": "",
-      "price": 18.54,
+      "price": 18.47,
       "prevClose": 18.41,
-      "changePct": 0.71,
+      "changePct": 0.33,
       "history": [
         15.32,
         16.05,
@@ -136,7 +136,7 @@
         18.63,
         18.89,
         18.41,
-        18.54
+        18.47
       ],
       "hi52": 35.3,
       "lo52": 13.38,
@@ -147,9 +147,9 @@
       "y": "KRW=X",
       "label": "원/달러 환율",
       "unit": "원",
-      "price": 1542.15,
+      "price": 1543.59,
       "prevClose": 1546.48,
-      "changePct": -0.28,
+      "changePct": -0.19,
       "history": [
         1495.29,
         1506.84,
@@ -172,7 +172,7 @@
         1535.25,
         1542.76,
         1546.48,
-        1542.15
+        1543.59
       ],
       "hi52": 1556.39,
       "lo52": 1322.42,
@@ -255,9 +255,9 @@
       "y": "CL=F",
       "label": "국제유가(WTI)",
       "unit": "$",
-      "price": 69.89,
+      "price": 69.63,
       "prevClose": 69.23,
-      "changePct": 0.95,
+      "changePct": 0.58,
       "history": [
         87.36,
         92.16,
@@ -279,11 +279,11 @@
         70.34,
         71.92,
         69.23,
-        69.89
+        69.63
       ],
       "hi52": 119.48,
       "lo52": 54.98,
-      "volume": 26332,
+      "volume": 27289,
       "ok": true
     }
   },
@@ -304,10 +304,9 @@
     }
   },
   "ai": {
-    "ok": false,
-    "reading": "AI 해석 생성에 실패했어. 아래 수치를 직접 확인해줘.",
-    "mindset": "데이터는 계기판일 뿐. 오늘도 차분하게.",
-    "debugError": "Gemini HTTP 503: {\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n"
+    "ok": true,
+    "reading": "어제 코스닥은 8% 넘게 크게 상승했으며, 외국인과 기관의 순매수가 두드러졌습니다. 간밤 미국 10년물 금리는 최근 5거래일간 소폭 하락하며 성장주에 대한 부담을 덜었고, VIX 지수는 평온한 수준을 유지했지만, 다우와 나스닥은 소폭 하락했습니다.",
+    "mindset": "시장의 일희일비에 흔들리기보다, 자신의 투자 원칙을 지키며 차분히 종목을 점검하는 하루가 되시길 바랍니다."
   },
   "holdings": [
     {
@@ -345,7 +344,7 @@
       ],
       "hi52": 82300,
       "lo52": 15940,
-      "volume": 255829,
+      "volume": 252906,
       "ok": true,
       "rangePct": 24,
       "news": [
@@ -371,9 +370,12 @@
         }
       ],
       "ai": {
-        "note": "AI 코멘트 생성 실패. 아래 뉴스 제목을 직접 확인해줘.",
-        "tags": [],
-        "debugError": "Gemini HTTP 503: {\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n"
+        "note": "클로봇은 오늘 12% 넘게 상승했지만, 여전히 52주 범위의 낮은 구간에 머물러 있어요. 두산로지스틱스솔루션 인수를 두고 사업 확장 기회와 재정적 여력에 대한 우려가 엇갈리고 있으며, 스마트 제조 자동화 시스템 구축 소식도 보이네요. 여러 정보들을 참고하여 상황을 지켜보는 것은 본인의 판단에 달려 있습니다.",
+        "tags": [
+          "DLS 인수",
+          "로봇 SI",
+          "재정 여력"
+        ]
       }
     },
     {
@@ -411,7 +413,7 @@
       ],
       "hi52": 69200,
       "lo52": 36150,
-      "volume": 717110,
+      "volume": 737305,
       "ok": true,
       "rangePct": 45,
       "news": [
@@ -437,9 +439,12 @@
         }
       ],
       "ai": {
-        "note": "AI 코멘트 생성 실패. 아래 뉴스 제목을 직접 확인해줘.",
-        "tags": [],
-        "debugError": "Gemini HTTP 503: {\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n"
+        "note": "HLB 주가는 오늘 6.92% 상승하며 52주 범위의 중간쯤에 위치해 있어. 한 달 앞으로 다가온 간암 신약의 FDA 결정이 주요 이슈로 보이며, 회사 측은 주가 급변동에 대해 FDA 승인 절차가 정상 진행 중임을 알리고 미확인 정보에 주의를 당부했어. 여러 소식들이 있지만, 판단은 본인의 몫이야.",
+        "tags": [
+          "FDA",
+          "간암 신약",
+          "주가 변동"
+        ]
       }
     }
   ]
