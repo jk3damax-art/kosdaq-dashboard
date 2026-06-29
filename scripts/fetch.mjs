@@ -52,10 +52,14 @@ async function callGemini(systemText, userText) {
 
 // 조회할 시장 지표 정의 ------------------------------------------------------
 const SYMBOLS = {
+  kospi: { y: "^KS11", label: "코스피", unit: "pt" },
   kosdaq: { y: "^KQ11", label: "코스닥", unit: "pt" },
   ust10y: { y: "^TNX", label: "미국 10년물 금리", unit: "%" },
   vix: { y: "^VIX", label: "VIX(공포지수)", unit: "" },
   usdkrw: { y: "KRW=X", label: "원/달러 환율", unit: "원" },
+  dow: { y: "^DJI", label: "다우", unit: "pt" },
+  nasdaq: { y: "^IXIC", label: "나스닥", unit: "pt" },
+  oil: { y: "CL=F", label: "국제유가(WTI)", unit: "$" },
 };
 
 // 친구가 보유한 종목 정의 ----------------------------------------------------
@@ -106,6 +110,37 @@ async function fetchYahoo(symbol) {
     lo52: lo52 != null ? Number(lo52.toFixed(2)) : null,
     volume: vol,
   };
+}
+
+// 코스피/코스닥 투자자별 수급(외국인·기관·개인) 조회 -------------------------
+// 네이버 모바일 API 사용(키 불필요). 단위는 백만원, "+12,345" 같은 문자열로 옴.
+// 해외 IP(GitHub Actions)에서 막힐 수 있으므로 실패해도 null 반환(전체는 안 죽음).
+async function fetchFlow(market) {
+  // market: "KOSPI" | "KOSDAQ"
+  const url = `https://m.stock.naver.com/api/index/${market}/trend`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        Referer: "https://m.stock.naver.com/",
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = await res.json();
+    // "+45,975" / "-77,332" → 숫자(백만원)로 변환
+    const num = (s) =>
+      s == null ? null : Number(String(s).replace(/[+,\s]/g, "")) || 0;
+    return {
+      ok: true,
+      bizdate: j.bizdate ?? null,
+      foreign: num(j.foreignValue), // 외국인 순매수(백만원)
+      institution: num(j.institutionalValue), // 기관 순매수
+      individual: num(j.personalValue), // 개인 순매수
+    };
+  } catch (err) {
+    console.error(`[flow] ${market} 수급 실패:`, err.message);
+    return { ok: false, foreign: null, institution: null, individual: null };
+  }
 }
 
 // 구글 뉴스 RSS에서 종목 관련 최신 기사 제목 가져오기 (한국어, 키 불필요) -------
@@ -235,7 +270,7 @@ async function aiHoldingNote(holding) {
 }
 
 // Gemini로 '경계등 해석' 생성 ------------------------------------------------
-async function aiInterpret(metrics) {
+async function aiInterpret(metrics, flow) {
   if (!process.env.GEMINI_API_KEY) {
     return {
       ok: false,
@@ -250,10 +285,22 @@ async function aiInterpret(metrics) {
   const fx = metrics.usdkrw;
   const vel = rateVelocity(r.history);
 
+  // 수급 한 줄 요약(백만원 → 억원으로 환산해 읽기 쉽게)
+  const flowLine = (f, name) => {
+    if (!f || !f.ok) return `${name} 수급: 확인필요`;
+    const eok = (v) => (v == null ? "?" : (v / 100).toFixed(0)); // 백만원→억원
+    return `${name} 수급(억원): 외국인 ${eok(f.foreign)}, 기관 ${eok(f.institution)}, 개인 ${eok(f.individual)}`;
+  };
+
   const facts = [
+    `코스피: ${metrics.kospi?.price ?? "확인필요"} (${metrics.kospi?.changePct ?? "?"}%)`,
     `코스닥: ${k.price ?? "확인필요"} (${k.changePct ?? "?"}%)`,
+    flowLine(flow?.kospi, "코스피"),
+    flowLine(flow?.kosdaq, "코스닥"),
     `미국 10년물 금리: ${r.price ?? "확인필요"}% (최근 5거래일 변화 ${vel ?? "?"}%p)`,
     `VIX: ${v.price ?? "확인필요"}`,
+    `다우: ${metrics.dow?.price ?? "확인필요"} (${metrics.dow?.changePct ?? "?"}%), 나스닥: ${metrics.nasdaq?.price ?? "확인필요"} (${metrics.nasdaq?.changePct ?? "?"}%)`,
+    `국제유가(WTI): ${metrics.oil?.price ?? "확인필요"}달러`,
     `원/달러: ${fx.price ?? "확인필요"}원`,
   ].join("\n");
 
@@ -264,6 +311,8 @@ async function aiInterpret(metrics) {
 해석 원칙:
 - 미국 10년물 금리는 '5% 넘으면 폭락'식 단정 금지. 절대 수치보다 '상승 속도'와 '왜 오르는지(경기호조 vs 인플레 우려)'를 더 비중 있게 봐라. 급등 중이면 "성장주·코스닥에 부담되는 환경" 정도의 경계로만 표현.
 - VIX는 후행 지표다. 'VIX 높음=지금 사라'식 금지. 20 이하 평온 / 20~30 경계 / 30 이상 시장이 이미 겁먹은 상태(이미 많이 반영됐을 수 있다는 뉘앙스).
+- 수급(외국인·기관·개인 순매수)은 '오늘 누가 샀나/팔았나'라는 사실일 뿐. 외국인이 팔았다고 "내일 빠진다"는 식의 예측 금지. 특히 코스닥은 외국인·기관 수급 방향만 담담히 언급.
+- 다우·나스닥은 '간밤 미국 시장 분위기'로만. 나스닥이 빠졌으면 "성장주 분위기가 약했다" 정도. 유가는 급등 시 인플레·항공/정유 영향 정도로만, 단정 금지.
 - "오늘 무너진다 / 이제 안전하다" 같은 단정 표현 금지.
 출력 형식(JSON만, 다른 말 금지):
 {"reading":"오늘 계기판 상태를 담담히 묘사한 2~3문장 (예언 아님, 상태 묘사)","mindset":"불안을 부추기지 않고 무리한 매매를 권하지 않는 따뜻한 1문장"}`;
@@ -288,7 +337,14 @@ async function aiInterpret(metrics) {
 // 실행 ---------------------------------------------------------------------
 async function main() {
   const metrics = await fetchAll();
-  const ai = await aiInterpret(metrics);
+
+  // 코스피·코스닥 투자자별 수급(외국인·기관·개인)
+  const flow = {
+    kospi: await fetchFlow("KOSPI"),
+    kosdaq: await fetchFlow("KOSDAQ"),
+  };
+
+  const ai = await aiInterpret(metrics, flow);
 
   // 보유 종목 시세·뉴스 조회 후, 종목별 관찰 코멘트 생성
   const holdings = await fetchHoldings();
@@ -306,6 +362,7 @@ async function main() {
     updatedAt: stamp,
     rateVelocity: rateVelocity(metrics.ust10y.history),
     metrics,
+    flow,
     ai,
     holdings,
   };

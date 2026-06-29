@@ -76,6 +76,14 @@
   .flat { color: var(--muted); }
   svg.spark { width: 100%; height: 36px; margin-top: 10px; display: block; }
 
+  /* 외국인/기관/개인 수급 */
+  .flow { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .flow-title { font-size: 10px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.2px; }
+  .flow-row { display: flex; justify-content: space-between; font-size: 12px; padding: 1px 0; }
+  .flow-row span:first-child { color: var(--muted); }
+  .flow-row span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .flow-na { font-size: 11px; color: var(--muted); }
+
   .badge {
     display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
     border-radius: 999px; margin-top: 8px;
@@ -440,6 +448,36 @@ function fxNote(price, chgPct) {
   return level + dir;
 }
 
+// 유가 한 줄 설명
+function oilNote(chgPct) {
+  if (chgPct == null) return "";
+  if (chgPct >= 2) return "오늘 급등 · 물가·정유/항공주에 영향 줄 수 있어요";
+  if (chgPct <= -2) return "오늘 급락 · 물가 부담은 다소 완화되는 편";
+  return "유가는 무난한 흐름이에요";
+}
+
+// 외국인/기관/개인 수급 표시 (백만원 단위 → 억원으로 환산해서 보여줌)
+function flowBlock(f) {
+  if (!f || !f.ok) {
+    return '<div class="flow"><div class="flow-na">수급 데이터 확인 필요</div></div>';
+  }
+  // 백만원 → 억원 (가독성). +면 빨강(순매수), -면 초록(순매도) = 한국식
+  const eok = (v) => (v == null ? null : Math.round(v / 100));
+  const row = (name, v) => {
+    const e = eok(v);
+    if (e == null) return `<div class="flow-row"><span>${name}</span><span class="flat">—</span></div>`;
+    const cls = e > 0 ? "up" : e < 0 ? "down" : "flat";
+    const sign = e > 0 ? "+" : "";
+    return `<div class="flow-row"><span>${name}</span><span class="${cls}">${sign}${e.toLocaleString("ko-KR")}억</span></div>`;
+  };
+  return `<div class="flow">
+    <div class="flow-title">오늘 수급 (순매수, 억원)</div>
+    ${row("외국인", f.foreign)}
+    ${row("기관", f.institution)}
+    ${row("개인", f.individual)}
+  </div>`;
+}
+
 // 금리 속도 노트
 function rateNote(vel) {
   if (vel == null) return "";
@@ -455,9 +493,10 @@ function render(d) {
   document.getElementById("aiReading").textContent = d.ai?.reading || "—";
   document.getElementById("aiMindset").textContent = d.ai?.mindset || "";
 
-  // 카드 4개
+  // 지표 카드들
   const m = d.metrics || {};
-  const order = ["kosdaq", "ust10y", "vix", "usdkrw"];
+  const flow = d.flow || {};
+  const order = ["kospi", "kosdaq", "dow", "nasdaq", "ust10y", "vix", "usdkrw", "oil"];
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
 
@@ -471,8 +510,11 @@ function render(d) {
     if (key === "ust10y") note = rateNote(d.rateVelocity);
     if (key === "vix") { badge = vixBadge(x.price); gauge = vixGauge(x.price); note = vixNote(x.price); }
     if (key === "usdkrw") note = fxNote(x.price, x.changePct);
+    if (key === "oil") note = oilNote(x.changePct);
     // VIX는 흐름 차트(최근 추이) + 눈금 막대(지금 위치)를 함께 표시
     const visual = key === "vix" ? spark(x.history, cls) + gauge : spark(x.history, cls);
+    // 코스피·코스닥 카드에는 외국인/기관/개인 수급을 붙인다
+    const flowHtml = (key === "kospi" || key === "kosdaq") ? flowBlock(flow[key]) : "";
 
     grid.insertAdjacentHTML("beforeend", `
       <div class="card">
@@ -481,6 +523,7 @@ function render(d) {
         <div class="chg ${cls}">${chgText(x.changePct)}</div>
         ${badge}
         ${visual}
+        ${flowHtml}
         <div class="note">${note}</div>
       </div>
     `);
