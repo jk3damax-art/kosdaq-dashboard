@@ -3,7 +3,11 @@ name: 매일 아침 시장 점검 갱신 + 배포
 on:
   schedule:
     # GitHub Actions는 UTC 기준. 오전 7시 KST = 22:00 UTC (전날)
-    - cron: "0 22 * * *"
+    # ⚠️ 정각(0분)은 전 세계 cron이 몰려 GitHub이 작업을 지연/누락시킴.
+    #    그래서 정각을 피하고, 혹시 한 번 누락돼도 다음 트리거가 받도록 여러 번 시도한다.
+    - cron: "7 22 * * *"   # 07:07 KST (메인)
+    - cron: "27 22 * * *"  # 07:27 KST (백업1)
+    - cron: "7 23 * * *"   # 08:07 KST (백업2)
   workflow_dispatch: {} # 수동 실행 버튼
 
 permissions:
