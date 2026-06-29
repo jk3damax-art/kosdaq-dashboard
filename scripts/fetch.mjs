@@ -288,10 +288,10 @@ async function aiInterpret(metrics, flow) {
   const fx = metrics.usdkrw;
   const vel = rateVelocity(r.history);
 
-  // 수급 한 줄 요약(백만원 → 억원으로 환산해 읽기 쉽게)
+  // 수급 한 줄 요약(네이버 값 단위 = 억원, 그대로 사용)
   const flowLine = (f, name) => {
     if (!f || !f.ok) return `${name} 수급: 확인필요`;
-    const eok = (v) => (v == null ? "?" : (v / 100).toFixed(0)); // 백만원→억원
+    const eok = (v) => (v == null ? "?" : v); // 억원
     return `${name} 수급(억원): 외국인 ${eok(f.foreign)}, 기관 ${eok(f.institution)}, 개인 ${eok(f.individual)}`;
   };
 

@@ -461,17 +461,23 @@ function flowBlock(f) {
   if (!f || !f.ok) {
     return '<div class="flow"><div class="flow-na">수급 데이터 확인 필요</div></div>';
   }
-  // 백만원 → 억원 (가독성). +면 빨강(순매수), -면 초록(순매도) = 한국식
-  const eok = (v) => (v == null ? null : Math.round(v / 100));
+  // 네이버 값 단위 = 억원. +면 빨강(순매수), -면 초록(순매도) = 한국식.
+  // 1조(=10,000억) 이상이면 'X.X조'로, 그 미만은 'N억'으로 읽기 쉽게.
+  const money = (v) => {
+    if (v == null) return null;
+    const abs = Math.abs(v);
+    const sign = v > 0 ? "+" : v < 0 ? "-" : "";
+    if (abs >= 10000) return `${sign}${(abs / 10000).toFixed(1)}조`;
+    return `${sign}${abs.toLocaleString("ko-KR")}억`;
+  };
   const row = (name, v) => {
-    const e = eok(v);
-    if (e == null) return `<div class="flow-row"><span>${name}</span><span class="flat">—</span></div>`;
-    const cls = e > 0 ? "up" : e < 0 ? "down" : "flat";
-    const sign = e > 0 ? "+" : "";
-    return `<div class="flow-row"><span>${name}</span><span class="${cls}">${sign}${e.toLocaleString("ko-KR")}억</span></div>`;
+    const txt = money(v);
+    if (txt == null) return `<div class="flow-row"><span>${name}</span><span class="flat">—</span></div>`;
+    const cls = v > 0 ? "up" : v < 0 ? "down" : "flat";
+    return `<div class="flow-row"><span>${name}</span><span class="${cls}">${txt}</span></div>`;
   };
   return `<div class="flow">
-    <div class="flow-title">오늘 수급 (순매수, 억원)</div>
+    <div class="flow-title">오늘 수급 (순매수)</div>
     ${row("외국인", f.foreign)}
     ${row("기관", f.institution)}
     ${row("개인", f.individual)}
