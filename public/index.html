@@ -6,22 +6,24 @@
 <title>아침 시장 점검</title>
 <!-- PWA: 앱처럼 설치/실행되게 하는 설정 -->
 <link rel="manifest" href="manifest.webmanifest" />
-<meta name="theme-color" content="#0d1117" />
+<meta name="theme-color" content="#faf8f3" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="시장점검" />
 <style>
   :root {
-    --bg: #0d1117;
-    --card: #161b22;
-    --line: #21262d;
-    --text: #e6edf3;
-    --muted: #8b949e;
-    --up: #f85149;     /* 한국식: 상승=빨강 */
-    --down: #3fb950;   /* 하락=초록 */
-    --accent: #58a6ff;
-    --warn: #d29922;
+    /* 따뜻한 아이보리 테마 (종이·리넨 같은 차분함) */
+    --bg: #faf8f3;      /* 크림 배경 */
+    --card: #ffffff;    /* 흰 카드 */
+    --line: #ece7dd;    /* 부드러운 경계선 */
+    --text: #3a3530;    /* 따뜻한 갈색 글자 */
+    --muted: #9b9287;   /* 흐린 갈색 */
+    --up: #d64545;      /* 상승=빨강 (밝은 배경용으로 살짝 진하게) */
+    --down: #2f6fd6;    /* 하락=파랑 */
+    --accent: #c08457;  /* 테라코타 포인트 */
+    --warn: #c9922b;
+    --shadow: 0 4px 16px rgba(58, 53, 48, 0.06); /* 밝은 배경용 부드러운 그림자 */
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -46,7 +48,7 @@
     padding: 12px 16px; border-radius: 10px; font-size: 16px; width: 100%; max-width: 280px;
   }
   #gate button {
-    background: var(--accent); color: #0d1117; border: none; font-weight: 700;
+    background: var(--accent); color: #ffffff; border: none; font-weight: 700;
     padding: 12px 24px; border-radius: 10px; font-size: 15px; cursor: pointer;
   }
   #gate .hint { color: var(--muted); font-size: 12px; }
@@ -54,8 +56,9 @@
 
   /* AI 해석 박스 */
   .ai {
-    background: linear-gradient(135deg, #161b22, #1c2333);
+    background: linear-gradient(135deg, #fbf6ee, #f6efe4);
     border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 18px;
+    box-shadow: var(--shadow);
   }
   .ai .tag { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0.5px; }
   .ai .reading { font-size: 16px; margin: 10px 0 14px; }
@@ -74,7 +77,7 @@
   }
   /* 각 그룹 안의 카드는 2열 그리드 */
   .group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
   .card .label { font-size: 13px; color: var(--muted); }
   .card .price { font-size: 26px; font-weight: 700; margin-top: 6px; letter-spacing: -0.5px; }
   .card .chg { font-size: 13px; font-weight: 600; margin-top: 2px; }
@@ -120,7 +123,7 @@
   .section-title { font-size: 15px; font-weight: 700; margin: 26px 0 12px; letter-spacing: -0.3px; }
   .stock {
     background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-    padding: 16px; margin-bottom: 12px;
+    padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow);
   }
   .stock-head { display: flex; justify-content: space-between; align-items: baseline; }
   .stock-name { font-size: 15px; font-weight: 700; }
@@ -148,7 +151,7 @@
     padding: 11px 14px; border-radius: 10px; font-size: 14px; min-width: 0;
   }
   .memo-write button {
-    background: var(--accent); color: #0d1117; border: none; font-weight: 700;
+    background: var(--accent); color: #ffffff; border: none; font-weight: 700;
     padding: 0 16px; border-radius: 10px; font-size: 14px; cursor: pointer; white-space: nowrap;
   }
   .name-row { font-size: 12px; color: var(--muted); margin-bottom: 10px; display: flex;
@@ -157,7 +160,7 @@
     background: var(--card); border: 1px solid var(--line); color: var(--muted);
     padding: 5px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
   }
-  .who-btn.active { background: var(--accent); color: #0d1117; border-color: var(--accent);
+  .who-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent);
     font-weight: 700; }
   .who-change { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
   .who-change b { color: var(--accent); }
@@ -169,7 +172,7 @@
     padding: 28px 24px; text-align: center; max-width: 320px; width: 100%; }
   .who-title { font-size: 18px; font-weight: 700; }
   .who-sub { font-size: 13px; color: var(--muted); margin: 6px 0 20px; }
-  .who-pick { display: block; width: 100%; background: var(--accent); color: #0d1117;
+  .who-pick { display: block; width: 100%; background: var(--accent); color: #ffffff;
     border: none; font-size: 17px; font-weight: 700; padding: 15px; border-radius: 12px;
     margin-top: 10px; cursor: pointer; }
   .who-pick[data-who="서동범"] { background: #2ea043; }
@@ -416,7 +419,7 @@ function spark(hist, cls) {
     const y = h - ((v - min) / range) * (h - 4) - 2;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
-  const color = cls === "up" ? "#f85149" : cls === "down" ? "#3fb950" : "#8b949e";
+  const color = cls === "up" ? "#d64545" : cls === "down" ? "#2f6fd6" : "#9b9287";
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8"
       stroke-linecap="round" stroke-linejoin="round"/></svg>`;
