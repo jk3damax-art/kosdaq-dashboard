@@ -20,8 +20,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 # 동시에 여러 번 돌지 않도록
 concurrency:
@@ -67,23 +65,6 @@ jobs:
           git diff --staged --quiet || git commit -m "chore: 일일 지표 갱신 $(date -u +%Y-%m-%d)"
           git push
 
-  # 2단계: 위에서 갱신이 끝나면 이어서 앱(웹) 배포 → 친구가 보는 화면에 바로 반영
-  deploy:
-    needs: refresh
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main # refresh가 방금 커밋한 최신 데이터를 받기
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - name: public 폴더 업로드
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
-      - id: deployment
-        uses: actions/deploy-pages@v4
+  # 배포는 Vercel이 담당한다. refresh가 daily.json 을 커밋/푸시하면
+  # Vercel이 그 커밋을 감지해 자동으로 최신 화면을 배포한다.
+  # (별도 GitHub Pages 배포 잡은 필요 없어 제거함)
