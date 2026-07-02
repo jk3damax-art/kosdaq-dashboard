@@ -19,7 +19,7 @@ const OUT = resolve(__dirname, "../public/daily.json");
 const AWS_REGION = process.env.AWS_REGION || "ap-northeast-2";
 const BEDROCK_MODEL_ID =
   process.env.BEDROCK_MODEL_ID ||
-  "global.anthropic.claude-haiku-4-5-20251001-v1:0";
+  "global.anthropic.claude-sonnet-5";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // system + user 프롬프트로 Claude를 호출하고, 응답 텍스트에서 JSON 객체를 파싱해 돌려준다.
@@ -33,7 +33,7 @@ async function callClaude(systemText, userText) {
     `${encodeURIComponent(BEDROCK_MODEL_ID)}/invoke`;
   const body = {
     anthropic_version: "bedrock-2023-05-31",
-    max_tokens: 1200,
+    max_tokens: 2500,
     system: systemText,
     messages: [{ role: "user", content: [{ type: "text", text: userText }] }],
   };
@@ -57,15 +57,46 @@ async function callClaude(systemText, userText) {
         .map((b) => b.text)
         .join("")
         .trim();
-      // 혹시 코드블록/여분 텍스트가 섞여도 첫 { ~ 마지막 } 만 파싱
-      const s = text.indexOf("{");
-      const e = text.lastIndexOf("}");
-      return JSON.parse(s !== -1 ? text.slice(s, e + 1) : text);
+      const parsed = parseLooseJson(text);
+      if (parsed) return parsed;
+      // 이번 응답이 JSON으로 안 풀리면(모델이 따옴표/개행을 흘린 경우) 재시도.
+      lastErr = "응답 JSON 파싱 실패";
+      continue;
     }
     lastErr = `HTTP ${res.status}: ${(await res.text()).slice(0, 150)}`;
     if (!RETRYABLE.has(res.status)) break; // 재시도해도 소용없는 오류면 포기
   }
   throw new Error(`[bedrock:${BEDROCK_MODEL_ID}] ${lastErr}`);
+}
+
+// 모델 응답에서 JSON 객체를 최대한 견고하게 뽑아낸다. 실패하면 null.
+// 1) 코드블록/여분 텍스트 제거 후 정식 JSON.parse 시도
+// 2) 그래도 안 되면(문자열 안에 이스케이프 안 된 따옴표·개행이 섞인 경우)
+//    필드별로 값만 관대하게 긁어온다.
+function parseLooseJson(text) {
+  if (!text) return null;
+  const s = text.indexOf("{");
+  const e = text.lastIndexOf("}");
+  const body = s !== -1 && e > s ? text.slice(s, e + 1) : text;
+  try {
+    return JSON.parse(body);
+  } catch {
+    // 관대한 폴백: "키": "값" 패턴에서 값을 뽑되, 다음 키(," 또는 })까지를 값으로 본다.
+    const out = {};
+    // 문자열 필드
+    for (const key of ["note", "reading", "mindset"]) {
+      const m = body.match(
+        new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"\\s*(?:,\\s*"|}\\s*$|}\\s*[^"]*$)`)
+      );
+      if (m) out[key] = m[1].replace(/\\n/g, " ").replace(/\s+/g, " ").trim();
+    }
+    // tags 배열
+    const t = body.match(/"tags"\s*:\s*\[([\s\S]*?)\]/);
+    if (t) {
+      out.tags = (t[1].match(/"([^"]*)"/g) || []).map((x) => x.replace(/"/g, ""));
+    }
+    return Object.keys(out).length ? out : null;
+  }
 }
 
 // 조회할 시장 지표 정의 ------------------------------------------------------
@@ -268,8 +299,11 @@ async function aiHoldingNote(holding) {
 - 매수/매도 권유 절대 금지.
 - 뉴스를 과장 해석 금지. 특히 신약·FDA·임상 관련 뉴스는 기대감만으로 주가가 출렁이므로, "이 뉴스로 오른다"가 아니라 "이런 이슈가 있다(확인 필요)" 식 사실 전달만.
 - 모르면 모른다고. 뉴스가 빈약하면 "특별한 뉴스는 안 보임"이라고만.
-할 일: 위 사실(가격 위치 + 뉴스 제목)을 바탕으로, 친구에게 담담하게 상황을 알려주는 2~3문장. 끝에 판단은 본인 몫이라는 뉘앙스.
-출력: JSON만. {"note":"2~3문장 관찰 코멘트","tags":["핵심 키워드 1~3개"]}`;
+할 일: 위 사실(가격 위치 + 뉴스 제목)을 바탕으로, 친구에게 담담하게 상황을 알려주는 관찰 코멘트를 쓴다.
+- 4~6문장으로 충분히 풀어서. 오늘 가격 움직임 → 52주 위치 맥락 → 뉴스에서 읽히는 이슈 → 지켜볼 포인트 순서로 자연스럽게.
+- 각 뉴스를 나열만 하지 말고, 어떤 성격의 이슈인지(호재성 기대감인지·불확실성인지·단순 사실인지) 담담히 짚어준다.
+- 끝 문장은 판단은 본인 몫이라는 차분한 뉘앙스로.
+출력: JSON만. {"note":"4~6문장 관찰 코멘트","tags":["핵심 키워드 1~3개"]}`;
 
   try {
     const parsed = await callClaude(
@@ -332,8 +366,11 @@ async function aiInterpret(metrics, flow) {
 - 수급(외국인·기관·개인 순매수)은 '오늘 누가 샀나/팔았나'라는 사실일 뿐. 외국인이 팔았다고 "내일 빠진다"는 식의 예측 금지. 특히 코스닥은 외국인·기관 수급 방향만 담담히 언급.
 - 다우·나스닥은 '간밤 미국 시장 분위기'로만. 나스닥이 빠졌으면 "성장주 분위기가 약했다" 정도. 유가는 급등 시 인플레·항공/정유 영향 정도로만, 단정 금지.
 - "오늘 무너진다 / 이제 안전하다" 같은 단정 표현 금지.
+분량과 구성:
+- reading은 4~6문장으로 충분히 풀어서. 코스피/코스닥 움직임과 수급 → 미국 시장 분위기(다우·나스닥) → 금리의 방향과 속도 → VIX·환율·유가 순으로 각 지표를 서로 연결지어 하나의 흐름으로 설명한다.
+- 숫자를 그냥 나열하지 말고 "왜 그런 상태인지, 성장주/코스닥에 어떤 환경인지"를 담담히 해석한다(단정·예언은 여전히 금지).
 출력 형식(JSON만, 다른 말 금지):
-{"reading":"오늘 계기판 상태를 담담히 묘사한 2~3문장 (예언 아님, 상태 묘사)","mindset":"불안을 부추기지 않고 무리한 매매를 권하지 않는 따뜻한 1문장"}`;
+{"reading":"오늘 계기판 상태를 담담히 묘사한 4~6문장 (예언 아님, 상태 묘사)","mindset":"불안을 부추기지 않고 무리한 매매를 권하지 않는 따뜻한 1~2문장"}`;
 
   try {
     const parsed = await callClaude(
