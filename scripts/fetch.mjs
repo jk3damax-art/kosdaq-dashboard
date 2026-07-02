@@ -2,7 +2,7 @@
 // public/daily.json 으로 저장한다. (GitHub Actions에서 구동)
 //
 // 데이터 소스: Yahoo Finance 차트 API + 구글 뉴스 RSS (무료, 키 불필요)
-// AI 해석:     Google Gemini API (환경변수 GEMINI_API_KEY, 무료 등급, 없으면 해석 건너뜀)
+// AI 해석:     AWS Bedrock의 Claude (환경변수 AWS_BEARER_TOKEN_BEDROCK, 없으면 해석 건너뜀)
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -11,69 +11,61 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(__dirname, "../public/daily.json");
 
-// Gemini 호출 공용 함수 -------------------------------------------------------
+// Bedrock Claude 호출 공용 함수 ----------------------------------------------
 // system + user 프롬프트를 받아 JSON 객체를 돌려준다. 실패 시 null.
 //
-// 모델 폴백 체인: 앞 모델이 과부하(503 등)면 다음 모델로 자동 전환.
-// '-latest' 별칭은 트래픽이 몰려 503이 잦으므로, 버전 고정 모델을 우선 쓴다.
-//   1순위 gemini-2.5-flash      : 품질 좋고 빠름 (이 앱에 최적)
-//   2순위 gemini-2.0-flash      : 한 세대 전, 매우 안정적 (트래픽 분산)
-//   3순위 gemini-2.5-flash-lite : 가장 가벼움, 거의 안 막힘 (최후 보루)
-const GEMINI_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-2.5-flash-lite",
-];
+// 인증: AWS_BEARER_TOKEN_BEDROCK (Bedrock API 키 토큰) — Bearer 헤더로 전달.
+// 리전/모델은 환경변수로 바꿀 수 있게 둔다(기본: 서울 + Haiku 4.5 인퍼런스 프로파일).
+const AWS_REGION = process.env.AWS_REGION || "ap-northeast-2";
+const BEDROCK_MODEL_ID =
+  process.env.BEDROCK_MODEL_ID ||
+  "global.anthropic.claude-haiku-4-5-20251001-v1:0";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 모델 1개로 호출 시도(재시도 포함). 과부하 등 일시 오류는 throw해서 다음 모델로 넘긴다.
-async function callGeminiModel(model, key, body) {
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` +
-    `?key=${key}`;
-  // 일시적 오류(429 한도, 503 과부하, 500 서버오류)는 잠깐 쉬었다 같은 모델로 재시도.
-  const RETRYABLE = new Set([429, 500, 503]);
+// system + user 프롬프트로 Claude를 호출하고, 응답 텍스트에서 JSON 객체를 파싱해 돌려준다.
+// 일시적 오류(429/500/503/529)는 잠깐 쉬었다 재시도.
+async function callClaude(systemText, userText) {
+  const token = process.env.AWS_BEARER_TOKEN_BEDROCK;
+  if (!token) return null;
+
+  const endpoint =
+    `https://bedrock-runtime.${AWS_REGION}.amazonaws.com/model/` +
+    `${encodeURIComponent(BEDROCK_MODEL_ID)}/invoke`;
+  const body = {
+    anthropic_version: "bedrock-2023-05-31",
+    max_tokens: 1200,
+    system: systemText,
+    messages: [{ role: "user", content: [{ type: "text", text: userText }] }],
+  };
+
+  const RETRYABLE = new Set([429, 500, 503, 529]);
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await sleep(attempt * 8000); // 0s → 8s → 16s
-    const res = await fetch(url, {
+    const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
     });
     if (res.ok) {
       const json = await res.json();
-      const text =
-        json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
-      return JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
+      const text = (json.content || [])
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("")
+        .trim();
+      // 혹시 코드블록/여분 텍스트가 섞여도 첫 { ~ 마지막 } 만 파싱
+      const s = text.indexOf("{");
+      const e = text.lastIndexOf("}");
+      return JSON.parse(s !== -1 ? text.slice(s, e + 1) : text);
     }
     lastErr = `HTTP ${res.status}: ${(await res.text()).slice(0, 150)}`;
-    if (!RETRYABLE.has(res.status)) break; // 재시도해도 소용없는 오류면 이 모델은 포기
+    if (!RETRYABLE.has(res.status)) break; // 재시도해도 소용없는 오류면 포기
   }
-  throw new Error(`[${model}] ${lastErr}`);
-}
-
-async function callGemini(systemText, userText) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
-  const body = {
-    // system 지시 + 사용자 입력을 합쳐 전달, JSON으로만 답하도록 강제
-    systemInstruction: { parts: [{ text: systemText }] },
-    contents: [{ role: "user", parts: [{ text: userText }] }],
-    generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
-  };
-
-  // 모델을 순서대로 시도: 앞 모델이 끝까지 실패하면 다음 모델로 폴백.
-  let lastErr;
-  for (const model of GEMINI_MODELS) {
-    try {
-      return await callGeminiModel(model, key, body);
-    } catch (err) {
-      lastErr = err.message;
-      console.error(`[gemini] ${model} 실패 → 다음 모델 시도:`, err.message);
-    }
-  }
-  throw new Error(`모든 모델 실패. 마지막 오류: ${lastErr}`);
+  throw new Error(`[bedrock:${BEDROCK_MODEL_ID}] ${lastErr}`);
 }
 
 // 조회할 시장 지표 정의 ------------------------------------------------------
@@ -257,8 +249,8 @@ async function fetchHoldings() {
 // 보유 종목별 '관찰 일지' 한 줄 생성 (Claude) --------------------------------
 // 핵심: 미래 예측·매매 권유 절대 금지. 그날의 사실(가격 위치 + 뉴스)만 차분히 요약.
 async function aiHoldingNote(holding) {
-  if (!process.env.GEMINI_API_KEY) {
-    return "AI 코멘트 비활성화 (GEMINI_API_KEY 미설정). 아래 뉴스 제목을 직접 확인해줘.";
+  if (!process.env.AWS_BEARER_TOKEN_BEDROCK) {
+    return "AI 코멘트 비활성화 (AWS_BEARER_TOKEN_BEDROCK 미설정). 아래 뉴스 제목을 직접 확인해줘.";
   }
   const headlines = (holding.news || [])
     .map((n, i) => `${i + 1}. ${n.title}`)
@@ -280,7 +272,7 @@ async function aiHoldingNote(holding) {
 출력: JSON만. {"note":"2~3문장 관찰 코멘트","tags":["핵심 키워드 1~3개"]}`;
 
   try {
-    const parsed = await callGemini(
+    const parsed = await callClaude(
       system,
       `${facts}\n\n위 원칙대로 JSON으로만 답해줘.`
     );
@@ -295,12 +287,12 @@ async function aiHoldingNote(holding) {
   }
 }
 
-// Gemini로 '경계등 해석' 생성 ------------------------------------------------
+// Claude로 '경계등 해석' 생성 ------------------------------------------------
 async function aiInterpret(metrics, flow) {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!process.env.AWS_BEARER_TOKEN_BEDROCK) {
     return {
       ok: false,
-      reading: "AI 해석 비활성화 (GEMINI_API_KEY 미설정). 지표 수치만 표시합니다.",
+      reading: "AI 해석 비활성화 (AWS_BEARER_TOKEN_BEDROCK 미설정). 지표 수치만 표시합니다.",
       mindset: "데이터는 점쟁이가 아니라 계기판이야. 오늘도 차분하게.",
     };
   }
@@ -344,7 +336,7 @@ async function aiInterpret(metrics, flow) {
 {"reading":"오늘 계기판 상태를 담담히 묘사한 2~3문장 (예언 아님, 상태 묘사)","mindset":"불안을 부추기지 않고 무리한 매매를 권하지 않는 따뜻한 1문장"}`;
 
   try {
-    const parsed = await callGemini(
+    const parsed = await callClaude(
       system,
       `오늘의 지표:\n${facts}\n\n위 원칙대로 JSON으로만 답해줘.`
     );

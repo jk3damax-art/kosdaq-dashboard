@@ -54,7 +54,9 @@ jobs:
       - name: 지표 조회 + AI 해석 생성
         if: steps.gate.outputs.skip != 'true'
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          BEDROCK_MODEL_ID: ${{ secrets.BEDROCK_MODEL_ID }}
         run: node scripts/fetch.mjs
       - name: daily.json 커밋
         if: steps.gate.outputs.skip != 'true'

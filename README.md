@@ -39,13 +39,17 @@ git branch -M main
 git push -u origin main
 ```
 
-### 2) Gemini API 키 등록 (AI 해석용, 무료)
+### 2) Bedrock Claude 자격증명 등록 (AI 해석용)
 GitHub 저장소 → **Settings → Secrets and variables → Actions → New repository secret**
-- 이름: `GEMINI_API_KEY`
-- 값: https://aistudio.google.com/apikey 에서 무료 발급한 키
+아래 3개를 각각 등록:
+- `AWS_BEARER_TOKEN_BEDROCK` : Bedrock API 키 토큰
+- `AWS_REGION` : `ap-northeast-2` (서울)
+- `BEDROCK_MODEL_ID` : `global.anthropic.claude-haiku-4-5-20251001-v1:0`
+  (품질을 더 원하면 `global.anthropic.claude-sonnet-5`)
 
-> 키를 안 넣어도 동작합니다. 그 경우 AI 해석 대신 지표 수치만 표시돼요.
-> 하루 1회 호출이라 Gemini 무료 등급 안에서 충분히 처리됩니다.
+> 토큰을 안 넣어도 동작합니다. 그 경우 AI 해석 대신 지표 수치만 표시돼요.
+> 하루 1회 호출이라 비용은 사실상 무료 수준입니다.
+> ⚠️ Bedrock 토큰은 만료될 수 있어요. AI 해석이 멈추면 이 Secret을 새 토큰으로 갱신하세요.
 
 ### 3) 자동 갱신 켜기
 GitHub 저장소 → **Actions** 탭 → 워크플로우 활성화 →
