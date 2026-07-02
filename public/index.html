@@ -65,7 +65,15 @@
   }
 
   /* 지표 카드 그리드 */
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  /* #grid 는 이제 카테고리 그룹들을 세로로 쌓는다 */
+  .grid { display: flex; flex-direction: column; gap: 22px; }
+  .metric-group { }
+  .group-title {
+    font-size: 14px; font-weight: 700; color: var(--muted);
+    margin: 0 0 10px 2px; letter-spacing: -0.3px;
+  }
+  /* 각 그룹 안의 카드는 2열 그리드 */
+  .group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
   .card .label { font-size: 13px; color: var(--muted); }
   .card .price { font-size: 26px; font-weight: 700; margin-top: 6px; letter-spacing: -0.5px; }
@@ -499,16 +507,22 @@ function render(d) {
   document.getElementById("aiReading").textContent = d.ai?.reading || "—";
   document.getElementById("aiMindset").textContent = d.ai?.mindset || "";
 
-  // 지표 카드들
+  // 지표 카드들 — 카테고리별로 묶어서 표시
   const m = d.metrics || {};
   const flow = d.flow || {};
-  const order = ["kospi", "kosdaq", "dow", "nasdaq", "ust10y", "vix", "usdkrw", "oil"];
+  // 그룹 정의: 소제목 + 그 그룹에 들어갈 지표 키들
+  const groups = [
+    { title: "🇰🇷 국내 증시", keys: ["kospi", "kosdaq"] },
+    { title: "🇺🇸 미국 증시", keys: ["dow", "nasdaq"] },
+    { title: "🌡️ 위험·거시 지표", keys: ["ust10y", "vix", "usdkrw", "oil"] },
+  ];
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
 
-  for (const key of order) {
+  // 카드 하나의 HTML을 만든다
+  function cardHtml(key) {
     const x = m[key];
-    if (!x) continue;
+    if (!x) return "";
     const cls = chgClass(x.changePct);
     let note = "";
     let badge = "";
@@ -517,12 +531,9 @@ function render(d) {
     if (key === "vix") { badge = vixBadge(x.price); gauge = vixGauge(x.price); note = vixNote(x.price); }
     if (key === "usdkrw") note = fxNote(x.price, x.changePct);
     if (key === "oil") note = oilNote(x.changePct);
-    // VIX는 흐름 차트(최근 추이) + 눈금 막대(지금 위치)를 함께 표시
     const visual = key === "vix" ? spark(x.history, cls) + gauge : spark(x.history, cls);
-    // 코스피·코스닥 카드에는 외국인/기관/개인 수급을 붙인다
     const flowHtml = (key === "kospi" || key === "kosdaq") ? flowBlock(flow[key]) : "";
-
-    grid.insertAdjacentHTML("beforeend", `
+    return `
       <div class="card">
         <div class="label">${x.label}</div>
         <div class="price">${fmt(x.price, x.unit)}</div>
@@ -531,6 +542,17 @@ function render(d) {
         ${visual}
         ${flowHtml}
         <div class="note">${note}</div>
+      </div>`;
+  }
+
+  // 그룹별로: 소제목 + 그 그룹 카드들을 담은 하위 그리드
+  for (const g of groups) {
+    const cards = g.keys.map(cardHtml).filter(Boolean).join("");
+    if (!cards) continue; // 해당 그룹 지표가 하나도 없으면 소제목도 생략
+    grid.insertAdjacentHTML("beforeend", `
+      <div class="metric-group">
+        <h3 class="group-title">${g.title}</h3>
+        <div class="group-grid">${cards}</div>
       </div>
     `);
   }
